@@ -1,0 +1,9 @@
+High School
+1-year Diploma
+2-year Diploma
+3-year Bachelor's Degree
+4-year Bachelor's Degree
+Bachelor's Degree
+Master's Degree
+Doctoral Degree
+Medical Doctor

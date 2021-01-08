@@ -1,0 +1,42 @@
+version: '3'
+
+services:
+  db:
+    image: postgres
+    environment:
+      POSTGRES_DB: language2test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+    ports:
+      - 5432:5432
+  postgres:
+      image: postgres
+      volumes:
+        - postgres_data:/var/lib/postgresql/data
+      environment:
+        POSTGRES_DB: keycloak
+        POSTGRES_USER: keycloak
+        POSTGRES_PASSWORD: password
+  keycloak:
+      image: quay.io/keycloak/keycloak:latest
+      volumes:
+        - keycloak-data-volume:/var/lib/keycloak/data
+      environment:
+        DB_VENDOR: POSTGRES
+        DB_ADDR: postgres
+        DB_DATABASE: keycloak
+        DB_USER: keycloak
+        DB_SCHEMA: public
+        DB_PASSWORD: password
+        KEYCLOAK_USER: admin
+        KEYCLOAK_PASSWORD: admin
+      ports:
+        - 8080:8080
+      depends_on:
+        - postgres
+
+volumes:
+  keycloak-data-volume:
+    driver: local
+  postgres_data:
+    driver: local

@@ -1,0 +1,87 @@
+Akan
+Amharic
+Arabic
+Assamese
+Awadhi
+Azerbaijani
+Belarusian
+Bengali
+Bhojpuri
+Bulgarian
+Burmese
+Cebuano
+Chhattisgarhi
+Chinese, Mandarin 普通话
+Chinese, Cantonese 广东话
+Chinese, Other
+Chittagonian
+Czech
+Deccan
+Dutch
+English
+Farsi (Persian)
+French
+Fulfulde
+German
+Greek
+Gujarati
+Haitian Creole French
+Haryanvi
+Hausa
+Hiligaynon
+Hindi
+Hungarian
+Igbo
+Ilocano
+Indonesian
+Italian
+Japanese 日本語
+Javanese
+Kannada
+Kazakh
+Khmer
+Kinyarwanda
+Korean
+Kurmanji
+Lombard
+Madura
+Magahi
+Maithili
+Malagasy
+Malay
+Malayalam
+Marathi
+Marwari
+Nepali
+Oriya (Odia)
+Oromo
+Pashto
+Polish
+Portuguese
+Punjabi
+Romanian
+Russian
+Saraiki
+Serbo-Croatian
+Shona
+Sindhi
+Sinhalese (Sinhala)
+Somali
+Spanish
+Sunda
+Swahili
+Swedish
+Tagalog
+Tamil
+Tatar
+Telegu
+Thai
+Turkish
+Ukrainian
+Urdu
+Uyghur
+Uzbek
+Vietnamese
+Yoruba
+Zulu
+OTHER LANGUAGE
