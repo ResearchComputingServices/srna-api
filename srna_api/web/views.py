@@ -18,9 +18,7 @@ import os
 import random
 import time
 from srna_api.srna_factory import make_celery
-from srna_api.extensions import app
-
-celery = make_celery(app)
+from srna_api.extensions import app, celery
 
 @celery.task()
 def add_together(a, b):
