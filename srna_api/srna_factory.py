@@ -4,10 +4,25 @@ from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
 
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend=app.config['CELERY_RESULT_BACKEND'],
+        broker=app.config['CELERY_BROKER_URL']
+    )
+    celery.conf.update(app.config)
+
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery.Task = ContextTask
+    return celery
+
 celery = None
 
 def create_app(package_name):
-    global celery
     from flask import Flask
     app = Flask(package_name)
     from srna_api.extensions import db, ma, migrate, oidc
@@ -18,10 +33,6 @@ def create_app(package_name):
     app.config['SQLALCHEMY_DATABASE_URI'] = client_secrets.get('postgres').get('database_uri')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['USE_X_SENDFILE'] = True
-
-    # Celery configuration
-    app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-    app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
     app.config.update({
         'SECRET_KEY': client_secrets.get('web').get('client_secret'),
@@ -36,9 +47,10 @@ def create_app(package_name):
         #'KEYCLOAK_USERNAME' : client_secrets.get('web').get('keycloak_username')
     })
 
-    # Initialize Celery
-    celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-    celery.conf.update(app.config)
+    app.config.update(
+        CELERY_BROKER_URL='redis://localhost:6379',
+        CELERY_RESULT_BACKEND='redis://localhost:6379'
+    )
 
     db.init_app(app)
     ma.init_app(app)

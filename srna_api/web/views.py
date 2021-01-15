@@ -13,14 +13,19 @@ import srna_api.web.user_keycloak
 import srna_api.web.authorization_view
 from celery import Celery
 #from srna_api.srna_factory import celery
-from app import app
+#from app import app
 import os
 import random
 import time
+from srna_api.srna_factory import make_celery
+from srna_api.extensions import app
 
-# Initialize Celery
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
+celery = make_celery(app)
+
+@celery.task()
+def add_together(a, b):
+    print("\nAdd\n")
+    return a + b
 
 @celery.task(bind=True)
 def long_task(self):
@@ -53,9 +58,9 @@ def hello():
 @crossdomain(origin='*')
 @authentication
 def longtask():
-    task = long_task.apply_async()
-    return jsonify({}), 202, {'Location': url_for('srna_api.taskstatus',
-                                                  task_id=task.id)}
+    result = add_together.delay(23, 42)
+    result.wait()  # 65
+    return jsonify({}), 202, {}
 
 @srna_bp.route('/status/<task_id>')
 @crossdomain(origin='*')

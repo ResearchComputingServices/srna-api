@@ -1,7 +1,6 @@
 from srna_api.web.views import *
 from srna_api import srna_factory
-
-global app
+from srna_api.extensions import app
 
 app = srna_factory.create_app(__name__)
 app.app_context().push()
