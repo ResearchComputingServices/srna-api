@@ -2,8 +2,12 @@ import json
 from flask import jsonify
 from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
+from celery import Celery
+
+celery = None
 
 def create_app(package_name):
+    global celery
     from flask import Flask
     app = Flask(package_name)
     from srna_api.extensions import db, ma, migrate, oidc
@@ -14,6 +18,10 @@ def create_app(package_name):
     app.config['SQLALCHEMY_DATABASE_URI'] = client_secrets.get('postgres').get('database_uri')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['USE_X_SENDFILE'] = True
+
+    # Celery configuration
+    app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+    app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
 
     app.config.update({
         'SECRET_KEY': client_secrets.get('web').get('client_secret'),
@@ -27,6 +35,10 @@ def create_app(package_name):
         'OIDC_REQUIRE_VERIFIED_EMAIL': False,
         #'KEYCLOAK_USERNAME' : client_secrets.get('web').get('keycloak_username')
     })
+
+    # Initialize Celery
+    celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
+    celery.conf.update(app.config)
 
     db.init_app(app)
     ma.init_app(app)
