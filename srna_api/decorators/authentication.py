@@ -18,6 +18,7 @@ def authentication(original_func):
             }
             return Response(json.dumps(error), 403, mimetype="application/json")
         token = auth_fragments[1]
+        print(token)
         is_valid = oidc.validate_token(token)
         if not is_valid:
             error = {

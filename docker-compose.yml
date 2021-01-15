@@ -1,14 +1,6 @@
 version: '3'
 
 services:
-  db:
-    image: postgres
-    environment:
-      POSTGRES_DB: language2test
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: admin
-    ports:
-      - 5432:5432
   postgres:
       image: postgres
       volumes:
