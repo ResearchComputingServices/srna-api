@@ -11,6 +11,7 @@ import srna_api.web.user_field_category_view
 import srna_api.web.enumeration_view
 import srna_api.web.user_keycloak
 import srna_api.web.authorization_view
+import srna_api.web.srna_view
 
 @srna_bp.route("/", methods=['GET'])
 @crossdomain(origin='*')
