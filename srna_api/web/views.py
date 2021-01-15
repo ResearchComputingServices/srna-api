@@ -25,7 +25,7 @@ celery = make_celery(app)
 @celery.task()
 def add_together(a, b):
     time.sleep(10)
-    print("\nadd_together processing\n")
+    print("\nCompleted add_together after 10 seconds delay\n")
     return a + b
 
 @srna_bp.route("/", methods=['GET'])
@@ -39,7 +39,7 @@ def hello():
 @authentication
 def longtask():
     task = add_together.delay(23, 42)
-    print("\nLaunched long_task processing\n")
+    print("\nLaunched add_together\n")
     return jsonify({ 'task_id': task.id, 'task_status': task.status }), 202, {}
 #
 # Celery worker needs to be started:
