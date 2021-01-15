@@ -20,8 +20,6 @@ def make_celery(app):
     celery.Task = ContextTask
     return celery
 
-celery = None
-
 def create_app(package_name):
     from flask import Flask
     app = Flask(package_name)
