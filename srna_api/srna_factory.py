@@ -2,6 +2,25 @@ import json
 from flask import jsonify
 from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
+from celery import Celery
+
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend=app.config['CELERY_RESULT_BACKEND'],
+        broker=app.config['CELERY_BROKER_URL']
+    )
+    celery.conf.update(app.config)
+
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+
+    celery.Task = ContextTask
+    return celery
+
+celery = None
 
 def create_app(package_name):
     from flask import Flask
@@ -27,6 +46,11 @@ def create_app(package_name):
         'OIDC_REQUIRE_VERIFIED_EMAIL': False,
         #'KEYCLOAK_USERNAME' : client_secrets.get('web').get('keycloak_username')
     })
+
+    app.config.update(
+        CELERY_BROKER_URL='redis://localhost:6379',
+        CELERY_RESULT_BACKEND='redis://localhost:6379'
+    )
 
     db.init_app(app)
     ma.init_app(app)
