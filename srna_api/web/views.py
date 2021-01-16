@@ -13,12 +13,7 @@ import srna_api.web.user_keycloak
 import srna_api.web.authorization_view
 import srna_api.web.srna_view
 from celery import Celery
-#from srna_api.srna_factory import celery
-#from app import app
-import os
-import random
 import time
-from srna_api.srna_factory import make_celery
 from srna_api.extensions import app, celery
 
 @celery.task()
