@@ -48,7 +48,7 @@ def _compute_srnas(sequence_to_read, accession_number, format, shift, length, on
     if only_tags:
         # 2.1. For a specific set of locus gene tags
         print('Compute sRNAs for a specific set of locus or gene tags')
-        gene_tags, locus_tags = sRNA_provider.load_tags(file_tags)
+        gene_tags, locus_tags = sRNA_provider.load_locus_gene_tags(file_tags)
 
         if len(gene_tags)==0 and len(locus_tags)==0:
             error = {"message": "An error occurred when retrieving gene/locus tags"}
@@ -65,10 +65,16 @@ def _compute_srnas(sequence_to_read, accession_number, format, shift, length, on
 
     #3. Blast each sRNA against input genome
     print('Blast each sRNA against input genome \n')
-    sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc)
+    try:
+        sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc)
+    except Exception as e:
+        print('An exception occurred at blasting re-computed sRNAS')
+        follow_hits=False
 
     #4 (optional)
     #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
+    list_sRNA_recomputed = []
+
     if follow_hits:
         #4.1 Obtan sRNAs with hits
         print('Get sRNA with hits \n')
@@ -80,8 +86,11 @@ def _compute_srnas(sequence_to_read, accession_number, format, shift, length, on
 
         #4.3 Blast re-computed sRNAs
         print('Blast the re-computed sRNAs')
-        ### Add an exception if blast fails we should return at least the list of srna
-        sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc)
+        try:
+            sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc)
+        except Exception as e:
+            print ('An exception occurred at blasting re-computed sRNAS')
+            list_sRNA_recomputed = []
 
     #5 Return output
     output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
@@ -152,21 +161,32 @@ def compute_srnas():
     try:
         #Read file sequence into a text string
         sequence_to_read = request.files['file_sequence'].read().decode('utf-8')
-        file_tags=None
         data = request.form
         format = data.get('format')
         shift = int(data.get('shift')) if data.get('shift') else None
         length = int(data.get('length')) if data.get('length') else None
-        only_tags = True if (data.get('only_tags') and data.get('only_tags')=='True') else False
+
+        if (data.get('only_tags') and data.get('only_tags') == 'True'):
+            only_tags = True
+        else:
+            only_tags = False
+
         e_cutoff = float(data.get('e_cutoff')) if data.get('e_cutoff') else None
         identity_perc = float(data.get('identity_perc')) if data.get('identity_perc') else None
-        follow_hits = data.get('follow_hits') if (data.get('follow_hits') and data.get('follow_hits')=='True') else False
+
+        if (data.get('follow_hits') and data.get('follow_hits') == 'True'):
+            follow_hits = True
+        else:
+            follow_hits = False
+
+
         shift_hits = int(data.get('shift_hits')) if data.get('shift_hits') else None
         accession_number = data.get('accession_number')
 
-
-        if only_tags:
+        if only_tags==True:
             file_tags = request.files['file_tags']
+        else:
+            file_tags = None
 
         error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits)
         if len(error) > 0:
