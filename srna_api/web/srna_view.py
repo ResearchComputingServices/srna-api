@@ -7,6 +7,7 @@ from srna_api.decorators.crossorigin import crossdomain
 from srna_api.decorators.authentication import authentication
 from srna_api.providers.sRNA_provider import sRNA_Provider
 
+
 sRNA_provider = sRNA_Provider()
 
 
@@ -180,7 +181,12 @@ def compute_srnas():
             follow_hits = False
 
 
-        shift_hits = int(data.get('shift_hits')) if data.get('shift_hits') else None
+        shift_hits = data.get('shift_hits')
+        if len(shift_hits)>0:
+            shift_hits = int(shift_hits)
+        else:
+            shift_hits = None
+
         accession_number = data.get('accession_number')
 
         if only_tags==True:
@@ -193,8 +199,11 @@ def compute_srnas():
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
+
+
         response = _compute_srnas(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff,
                        identity_perc, follow_hits, shift_hits)
+
         if not response:
             error = {"message": "An error occurred when processing the request"}
             response = Response(json.dumps(error), 400, mimetype="application/json")

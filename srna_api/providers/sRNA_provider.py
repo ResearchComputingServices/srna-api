@@ -13,6 +13,7 @@ import json
 import os.path
 from datetime import datetime
 from io import StringIO
+import uuid
 
 
 DEBUG=2
@@ -366,8 +367,10 @@ class sRNA_Provider:
 
     def __blast_sRNA_against_genome(self, list_sRNA, e_cutoff, identity_perc_cutoff):
 
-        query_file = "seq_sRNA.fasta"
-        subject_file = "seq_Source.fasta"
+        #Creates temporary files
+        query_file = str(uuid.uuid4()) + '.fasta'
+        subject_file = str(uuid.uuid4()) + '.fasta'
+
 
         for index, srna in enumerate(list_sRNA):
             SeqIO.write(srna.input_sequence, subject_file, "fasta")
@@ -376,6 +379,13 @@ class sRNA_Provider:
             if len(srna.sequence_sRNA)>0 and len(srna.input_sequence)>0 and len(srna.list_hits)==0:
                     list_hits = self.blastProvider.blast(query_file, subject_file, str(srna.sequence_sRNA),float(e_cutoff), float(identity_perc_cutoff))
                     srna.list_hits = list_hits
+
+        # Remove temporary files
+        if os.path.exists(query_file):
+            os.remove(query_file)
+
+        if os.path.exists(subject_file):
+            os.remove(subject_file)
 
 
 
