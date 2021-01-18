@@ -1,4 +1,4 @@
-from srna_api.models.role import *
+
 from srna_api.models.user_field_type import *
 from srna_api.models.user_field_category import *
 from srna_api.models.user import *

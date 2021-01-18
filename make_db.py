@@ -1,11 +1,9 @@
 import subprocess
-from srna_api.extensions import db, ma
-from srna_api import models, providers, srna_factory
+from srna_api import models, providers
+from srna_api.extensions import db, ma, app
 import glob
 import importlib
 import os
-
-app = srna_factory.create_app(__name__)
 
 def is_python_script(name):
     return '.py' in name
