@@ -201,3 +201,22 @@ Trying again in 32.00 seconds... (16/100)
 [2021-01-15 15:45:19,491: WARNING/ForkPoolWorker-20] Completed add_together after 10 seconds delay
 [2021-01-15 15:45:20,269: WARNING/ForkPoolWorker-21] Completed add_together after 10 seconds delay
 [2021-01-15 16:20:28,357: WARNING/ForkPoolWorker-20] Completed add_together after 10 seconds delay
+[2021-01-15 16:21:52,432: WARNING/ForkPoolWorker-20] Completed add_together after 10 seconds delay
+
+worker: Warm shutdown (MainProcess)
+ 
+ -------------- celery@Sergius-MacBook-Pro-2.local v4.4.7 (cliffs)
+--- ***** ----- 
+-- ******* ---- macOS-10.15.7-x86_64-i386-64bit 2021-01-15 13:30:57
+- *** --- * --- 
+- ** ---------- [config]
+- ** ---------- .> app:         srna_api.extensions:0x7ff773a27e50
+- ** ---------- .> transport:   redis://localhost:6379//
+- ** ---------- .> results:     redis://localhost:6379/
+- *** --- * --- .> concurrency: 12 (prefork)
+-- ******* ---- .> task events: OFF (enable -E to monitor tasks in this worker)
+--- ***** ----- 
+ -------------- [queues]
+                .> celery           exchange=celery(direct) key=celery
+                
+
