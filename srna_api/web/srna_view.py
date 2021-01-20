@@ -6,9 +6,15 @@ from srna_api.web.common_view import srna_bp
 from srna_api.decorators.crossorigin import crossdomain
 from srna_api.decorators.authentication import authentication
 from srna_api.providers.sRNA_provider import sRNA_Provider
-
+from srna_api.extensions import celery
+from flask import jsonify
+import io
+import os
+import uuid
 
 sRNA_provider = sRNA_Provider()
+task = []
+
 
 
 def _read_input_sequence(sequence_to_read,accession_number,format):
@@ -30,18 +36,20 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
     return sequence_record_list
 
 
+@celery.task()
+def _compute_srnas(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff,identity_perc, follow_hits, shift_hits, output_file_name):
 
-def _compute_srnas(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff,identity_perc, follow_hits, shift_hits):
+    #Path for temporary location
+    filepath_temp = "srna-data/temp_files/"
 
     #1. Obtain input sequence
     sequence_record_list =  _read_input_sequence(sequence_to_read,accession_number,format)
 
     if len(sequence_record_list)==0:
         #Error occurred at reading the sequence
-        error = {"message": "An error occurred when retrieving sequence"}
+        error = {"message": "An error occurred when reading sequence"}
         response = Response(json.dumps(error), 400, mimetype="application/json")
         return response
-
 
     sequence_name = sequence_record_list[0].name
 
@@ -65,9 +73,9 @@ def _compute_srnas(sequence_to_read, accession_number, format, shift, length, on
 
 
     #3. Blast each sRNA against input genome
-    print('Blast each sRNA against input genome \n')
+    print('Blast each sRNA against input genome\n')
     try:
-        sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc)
+        sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
     except Exception as e:
         print('An exception occurred at blasting re-computed sRNAS')
         follow_hits=False
@@ -88,15 +96,34 @@ def _compute_srnas(sequence_to_read, accession_number, format, shift, length, on
         #4.3 Blast re-computed sRNAs
         print('Blast the re-computed sRNAs')
         try:
-            sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc)
+            sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc,filepath_temp)
         except Exception as e:
             print ('An exception occurred at blasting re-computed sRNAS')
             list_sRNA_recomputed = []
 
     #5 Return output
+    print ('Export output')
     output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
 
-    return send_file(output, attachment_filename="sRNA Result" + '.xlsx',mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, cache_timeout=-1)
+    print ('Save Output into srna-data/output_files')
+    filepath_output =  "srna-data/output_files/" + output_file_name + ".xlsx"
+    print (filepath_output)
+
+    if task:
+        print ('Task Id')
+        print (task.id)
+
+    with open(filepath_output, 'wb') as out:
+        out.write(output.read())
+
+    ##Remove file from location
+    #os.remove(filepath_output)  ## Delete file when done
+
+    print ('Task Completed')
+    return ('Done')
+    #return send_file(output, attachment_filename="sRNA Result" + '.xlsx',mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, cache_timeout=-1)
+
+
 
 
 def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits):
@@ -199,17 +226,62 @@ def compute_srnas():
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
+        global task
+        output_file_name = str(uuid.uuid4())
+        task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits, output_file_name)
 
+        #response = _compute_srnas(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags,e_cutoff, identity_perc, follow_hits, shift_hits,output_file_name)
+        #return response
 
-        response = _compute_srnas(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff,
-                       identity_perc, follow_hits, shift_hits)
-
-        if not response:
+        if not task:
             error = {"message": "An error occurred when processing the request"}
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
+        else:
+            return jsonify({'Task_id': task.id, 'Task_status': task.status, 'File_name:': output_file_name}), 202, {}
 
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
-    return response
+        return response
+
+
+
+
+
+def download_file(fullpath, filename):
+        with open(fullpath, 'rb') as binary:
+            return send_file(
+                io.BytesIO(binary.read()),
+                attachment_filename=filename,
+                as_attachment=True,
+                mimetype="application/binary")
+        return Response(json.dumps([]), 404, mimetype="application/json", cache_timeout=-1)
+
+
+@srna_bp.route("/get_output_file", methods=['GET'])
+@crossdomain(origin='*')
+@authentication
+def get_output_file():
+    try:
+        file_id = request.args.get('file_id')
+
+        if not file_id:
+            error = {"message": "Expected File Id. Check the format of the request."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
+
+        file_id = file_id + '.xlsx'
+        fullpath = "srna-data/output_files/" + file_id
+        if os.path.exists(fullpath):
+            return download_file(fullpath, file_id)
+        else:
+            error = {"message": "Still Processing"}
+            return Response(json.dumps(error), 500, mimetype="application/json")
+
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
+
+

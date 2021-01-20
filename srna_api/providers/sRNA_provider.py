@@ -365,11 +365,11 @@ class sRNA_Provider:
 
 
 
-    def __blast_sRNA_against_genome(self, list_sRNA, e_cutoff, identity_perc_cutoff):
+    def __blast_sRNA_against_genome(self, list_sRNA, e_cutoff, identity_perc_cutoff,filepath):
 
         #Creates temporary files
-        query_file = str(uuid.uuid4()) + '.fasta'
-        subject_file = str(uuid.uuid4()) + '.fasta'
+        query_file = filepath + str(uuid.uuid4()) + '.fasta'
+        subject_file = filepath + str(uuid.uuid4()) + '.fasta'
 
 
         for index, srna in enumerate(list_sRNA):
@@ -389,19 +389,19 @@ class sRNA_Provider:
 
 
 
-    def blast_sRNAs_against_genome_for_DEBUG(self, list_sRNA, e_cutoff, identity_perc_cutoff):
+    def blast_sRNAs_against_genome_for_DEBUG(self, list_sRNA, e_cutoff, identity_perc_cutoff,filepath):
         for list_sRNA_per_record in list_sRNA:
             list_sRNA_per_record_ = list_sRNA_per_record[0:DEBUG]    ####For debuging only!
             #list_sRNA_per_record_ = list_sRNA_per_record
-            self.__blast_sRNA_against_genome(list_sRNA_per_record_, e_cutoff, identity_perc_cutoff)
+            self.__blast_sRNA_against_genome(list_sRNA_per_record_, e_cutoff, identity_perc_cutoff,filepath)
         return (list_sRNA)
 
 
 
 
-    def blast_sRNAs_against_genome(self, list_sRNA, e_cutoff, identity_perc_cutoff):
+    def blast_sRNAs_against_genome(self, list_sRNA, e_cutoff, identity_perc_cutoff, filepath):
         for list_sRNA_per_record in list_sRNA:
-            self.__blast_sRNA_against_genome(list_sRNA_per_record, e_cutoff, identity_perc_cutoff)
+            self.__blast_sRNA_against_genome(list_sRNA_per_record, e_cutoff, identity_perc_cutoff,filepath)
         return (list_sRNA)
 
 
