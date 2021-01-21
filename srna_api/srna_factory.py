@@ -3,15 +3,18 @@ from flask import jsonify
 from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
+from flask_cors import CORS
 
 def make_celery(app):
     celery = Celery(
         app.import_name,
-        backend=app.config['CELERY_RESULT_BACKEND'],
-        broker=app.config['CELERY_BROKER_URL']
+        #backend=app.config['CELERY_RESULT_BACKEND'],
+        #broker=app.config['CELERY_BROKER_URL']
+        backend=app.config['result_backend'],
+        broker=app.config['broker_url']
     )
     celery.conf.update(app.config)
-
+    celery.conf.task_track_started = True
     class ContextTask(celery.Task):
         def __call__(self, *args, **kwargs):
             with app.app_context():
@@ -24,6 +27,7 @@ def create_app(package_name):
     from flask import Flask
     app = Flask(package_name)
     from srna_api.extensions import db, ma, migrate, oidc
+    cors = CORS(app, resources={r"*": {"origins": "*"}})
 
     with open('client_secrets.json') as client_secrets_file:
         client_secrets = json.load(client_secrets_file)
@@ -46,9 +50,15 @@ def create_app(package_name):
     })
 
     app.config.update(
-        CELERY_BROKER_URL='redis://localhost:6379',
-        CELERY_RESULT_BACKEND='redis://localhost:6379'
+        broker_url='redis://localhost:6379',
+        result_backend='redis://localhost:6379'
     )
+
+    #app.config.update(
+    #    CELERY_BROKER_URL='redis://localhost:6379',
+    #    CELERY_RESULT_BACKEND='redis://localhost:6379'
+    #)
+
 
     db.init_app(app)
     ma.init_app(app)
@@ -65,3 +75,5 @@ def register_blueprints(app):
     from srna_api.web.views import srna_bp
     app.register_blueprint(srna_bp, url_prefix='/srna_api')
     return app
+
+

@@ -18,6 +18,7 @@ flask-marshmallow==0.11.0
 Flask-Migrate==2.5.3
 flask-oidc==1.4.0
 Flask-SQLAlchemy==2.4.1
+Flask-Cors==3.0.10
 flower==0.9.7
 future==0.18.2
 geocoder==1.38.1
