@@ -12,6 +12,7 @@ import io
 import os
 import uuid
 from celery.result import AsyncResult
+from werkzeug import secure_filename
 
 sRNA_provider = sRNA_Provider()
 
@@ -33,7 +34,6 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
             sequence_record_list = sRNA_provider.fetch_input_sequence(accession_number)
 
     return sequence_record_list
-
 
 @celery.task(bind=True)
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
@@ -113,12 +113,16 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
     with open(filepath_output, 'wb') as out:
         out.write(output.read())
 
-    ##Remove file from location
-    #os.remove(filepath_output)  ## Delete file when done
+    #6. Remove temporal input sequence
+    print ('Remove input sequence')
+    os.remove(sequence_to_read)
 
     print ('Task Completed')
     return ('Done')
     #return send_file(output, attachment_filename="sRNA Result" + '.xlsx',mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", as_attachment=True, cache_timeout=-1)
+
+
+
 
 
 def _compute_srnas_seq(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff,identity_perc, follow_hits, shift_hits, output_file_name):
@@ -266,8 +270,9 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
 def compute_srnas():
     try:
         #Obtain request parameters
-        #Read file sequence into a text string
-        sequence_to_read = request.files['file_sequence'].read().decode('utf-8')
+        file = request.files.get('file_sequence')
+        name = str(uuid.uuid4()) + '_' + file.filename
+        sequence_to_read = upload_file(file, name)
         data = request.form
         format = data.get('format')
         shift = int(data.get('shift')) if data.get('shift') else None
@@ -302,6 +307,7 @@ def compute_srnas():
         error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits)
         if len(error) > 0:
             response = Response(json.dumps(error), 400, mimetype="application/json")
+            remove_file(sequence_to_read)
             return response
 
         #3. Load input sequence
@@ -311,6 +317,7 @@ def compute_srnas():
             # Error occurred at reading the sequence
              error = {"message": "An error occurred when reading sequence. Please verify file and that format corresponds to the sequence file."}
              response = Response(json.dumps(error), 400, mimetype="application/json")
+             remove_file(sequence_to_read)
              return response
 
         #4. Obtain gene tags and locus tags
@@ -322,18 +329,16 @@ def compute_srnas():
             if len(gene_tags) == 0 and len(locus_tags) == 0:
                 error = {"message": "An error occurred when retrieving gene/locus tags. Please verify the format of the tags file."}
                 response = Response(json.dumps(error), 400, mimetype="application/json")
+                remove_file(sequence_to_read)
                 return response
 
         #5. Call sRNA computation
         task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags)
 
-        #task = _compute_srnas_seq_2(sequence_record_list, format, shift, length, only_tags, e_cutoff, identity_perc, follow_hits, shift_hits, output_file_name, gene_tags, locus_tags)
-        #response = _compute_srnas_seq(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags,e_cutoff, identity_perc, follow_hits, shift_hits,output_file_name)
-        #return response
-
         if not task:
             error = {"message": "An error occurred when processing the request"}
             response = Response(json.dumps(error), 400, mimetype="application/json")
+            remove_file(sequence_to_read)
             return response
         else:
             return jsonify({'Task_id': task.id, 'Task_status': task.status}), 202, {}
@@ -341,7 +346,23 @@ def compute_srnas():
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
+        remove_file(sequence_to_read)
         return response
+
+def remove_file(filename):
+    if os.path.exists(filename):
+        os.remove(filename)
+
+def upload_file(file, name):
+    if file and name:
+        folder = 'srna-data/input_files'
+        filename = secure_filename(name)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        fullpath = os.path.join(folder, filename)
+        file.save(fullpath)
+        return fullpath
+
 
 
 def download_file(filename):

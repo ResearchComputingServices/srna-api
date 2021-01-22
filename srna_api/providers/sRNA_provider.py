@@ -57,7 +57,7 @@ class sRNA_Provider:
 
 
     #Reads a data file and return a list of seq_record
-    def read_input_sequence(self, sequence_to_read, format):
+    def read_input_sequence_create_handle(self, sequence_to_read, format):
         try:
             #If sending file location use this line insead.
             #Instead of the lines handle= and seq_iterator=
@@ -67,6 +67,20 @@ class sRNA_Provider:
             handle = StringIO(sequence_to_read)
             seq_iterator = SeqIO.parse(handle, format)
 
+            seq_record_list = list(seq_iterator)
+        except Exception as e:
+            seq_record_list=[]
+            print("Unexpected error at read_sequence:", sys.exc_info()[0])
+            traceback.print_exc()
+
+        return seq_record_list
+
+
+    #Reads a data file and return a list of seq_record
+    def read_input_sequence(self, input_file, format):
+        try:
+            #If sending file location use this line insead.
+            seq_iterator = SeqIO.parse(input_file,format)
             seq_record_list = list(seq_iterator)
         except Exception as e:
             seq_record_list=[]
