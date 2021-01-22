@@ -25,3 +25,4 @@ htmlcov/
 client_secrets.json
 images
 keycloak-db
+srna-data

@@ -3,7 +3,6 @@ from flask import jsonify
 from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
-from flask_cors import CORS
 from flask_sse import sse
 
 def make_celery(app):
@@ -26,7 +25,6 @@ def create_app(package_name):
     from flask import Flask
     app = Flask(package_name)
     from srna_api.extensions import db, ma, migrate, oidc
-    cors = CORS(app, resources={r"*": {"origins": "*"}})
 
     with open('client_secrets.json') as client_secrets_file:
         client_secrets = json.load(client_secrets_file)
@@ -46,14 +44,12 @@ def create_app(package_name):
         'OIDC_TOKEN_TYPE_HINT': 'access_token',
         'OIDC_ID_TOKEN_COOKIE_SECURE': False,
         'OIDC_REQUIRE_VERIFIED_EMAIL': False,
-        #'KEYCLOAK_USERNAME' : client_secrets.get('web').get('keycloak_username')
     })
 
     app.config.update(
         broker_url='redis://localhost:6379',
         result_backend='redis://localhost:6379'
     )
-
 
     db.init_app(app)
     ma.init_app(app)

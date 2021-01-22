@@ -14,13 +14,11 @@ import uuid
 from celery.result import AsyncResult
 from werkzeug import secure_filename
 from flask_sse import sse
+from srna_api.decorators.crossorigin import crossdomain
 
 sRNA_provider = sRNA_Provider()
 
-
-
 def _read_input_sequence(sequence_to_read,accession_number,format):
-
     sequence_record_list=[]
     #1.1 Read an attached sequence file
     if sequence_to_read:
@@ -38,7 +36,6 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
 
 @celery.task(bind=True)
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
-
     print ('Task Id')
     print(self.request.id)
 
@@ -126,8 +123,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         print('An exception occurred when sending Task Completed msg')
     return ('Done')
 
-
-
 def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits):
     error = ''
     # Returns error if neither a file sequence or an accession number was provided
@@ -182,9 +177,8 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
 
     return error
 
-
-
 @srna_bp.route("/compute_srnas", methods=['POST'])
+@crossdomain(origin='*')
 def compute_srnas():
     try:
         #Obtain request parameters
@@ -281,8 +275,6 @@ def upload_file(file, name):
         file.save(fullpath)
         return fullpath
 
-
-
 def download_file(filename):
     filename = filename + '.xlsx'
     fullpath = "srna-data/output_files/" + filename
@@ -297,9 +289,8 @@ def download_file(filename):
     error = {"message": "File does not exist"}
     return Response(json.dumps(error), 404, mimetype="application/json")
 
-
-
 @srna_bp.route("/get_output_file", methods=['GET'])
+@crossdomain(origin='*')
 def get_output_file():
     try:
         task_id = request.args.get('task_id')
@@ -318,6 +309,7 @@ def get_output_file():
 
 
 @srna_bp.route("/get_task_status", methods=['GET'])
+@crossdomain(origin='*')
 def get_task_status():
     try:
 
@@ -337,6 +329,3 @@ def get_task_status():
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
         return response
-
-
-
