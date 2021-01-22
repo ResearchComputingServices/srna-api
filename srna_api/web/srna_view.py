@@ -413,10 +413,7 @@ def get_task_status():
         res = celery.AsyncResult(task_id)
         print(res.status)
 
-        if res.status == 'SUCCESS':
-            return download_file(task_id)
-        else:
-            return jsonify({'Task_id': task_id, 'Task_status': res.status}), 202, {}
+        return jsonify({'Task_id': task_id, 'Task_status': res.status}), 200, {}
 
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
