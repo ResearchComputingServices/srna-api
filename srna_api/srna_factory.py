@@ -4,12 +4,11 @@ from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
 from flask_cors import CORS
+from flask_sse import sse
 
 def make_celery(app):
     celery = Celery(
         app.import_name,
-        #backend=app.config['CELERY_RESULT_BACKEND'],
-        #broker=app.config['CELERY_BROKER_URL']
         backend=app.config['result_backend'],
         broker=app.config['broker_url']
     )
@@ -35,6 +34,7 @@ def create_app(package_name):
     app.config['SQLALCHEMY_DATABASE_URI'] = client_secrets.get('postgres').get('database_uri')
     app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
     app.config['USE_X_SENDFILE'] = True
+    app.config['REDIS_URL'] = 'redis://localhost:6379'
 
     app.config.update({
         'SECRET_KEY': client_secrets.get('web').get('client_secret'),
@@ -54,11 +54,6 @@ def create_app(package_name):
         result_backend='redis://localhost:6379'
     )
 
-    #app.config.update(
-    #    CELERY_BROKER_URL='redis://localhost:6379',
-    #    CELERY_RESULT_BACKEND='redis://localhost:6379'
-    #)
-
 
     db.init_app(app)
     ma.init_app(app)
@@ -74,6 +69,7 @@ def create_app(package_name):
 def register_blueprints(app):
     from srna_api.web.views import srna_bp
     app.register_blueprint(srna_bp, url_prefix='/srna_api')
+    app.register_blueprint(sse, url_prefix='/srna_api/stream')
     return app
 
 
