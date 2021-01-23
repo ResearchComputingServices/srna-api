@@ -15,6 +15,8 @@ from celery.result import AsyncResult
 from werkzeug import secure_filename
 from flask_sse import sse
 from srna_api.decorators.crossorigin import crossdomain
+import sys
+import traceback
 
 sRNA_provider = sRNA_Provider()
 
@@ -36,91 +38,95 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
 
 @celery.task(bind=True)
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
-    print ('Task Id')
-    print(self.request.id)
 
-    #Path for temporary location
-    filepath_temp = "srna-data/temp_files/"
+    try:
+        print ('Task Id')
+        print(self.request.id)
 
-    # 1. Obtain input sequence
-    sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
+        #Path for temporary location
+        filepath_temp = "srna-data/temp_files/"
 
-    if len(sequence_record_list) == 0:
-        # Error occurred at reading the sequence
-        print ('Error at reading sequence file')
-        raise KeyError()
+        # 1. Obtain input sequence
+        sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
 
-    #Retrieve sequence name
-    sequence_name = sequence_record_list[0].name
-
-    # 2. Compute sRNA
-    if only_tags:
-        # 2.1. For a specific set of locus gene tags
-        if len(gene_tags) == 0 and len(locus_tags) == 0:
-            print ('Error at reading gene/locus tags')
+        if len(sequence_record_list) == 0:
+            # Error occurred at reading the sequence
+            print ('Error at reading sequence file')
             raise KeyError()
+
+        #Retrieve sequence name
+        sequence_name = sequence_record_list[0].name
+
+        #2. Compute sRNA
+        if only_tags:
+            # 2.1. For a specific set of locus gene tags
+            if len(gene_tags) == 0 and len(locus_tags) == 0:
+                print ('Error at reading gene/locus tags')
+                raise KeyError()
+            else:
+                print('Compute sRNAS for a list of gene/locus tags')
+                list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length),gene_tags, locus_tags)
         else:
-            print('Compute sRNAS for a list of gene/locus tags')
-            list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length),
-                                                                gene_tags, locus_tags)
-    else:
-        # 2.2. For all CDS
-        print('Compute sRNAs for all CDS in genome')
-        list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length))
+            # 2.2. For all CDS
+            print('Compute sRNAs for all CDS in genome')
+            list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length))
 
-
-    #3. Blast each sRNA against input genome
-    print('Blast each sRNA against input genome\n')
-    try:
-        sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
-    except Exception as e:
-        print('An exception occurred at blasting re-computed sRNAS')
-        follow_hits=False
-
-    #4 (optional)
-    #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
-    list_sRNA_recomputed = []
-
-    if follow_hits:
-        #3.1 Obtan sRNAs with hits
-        print('Get sRNA with hits \n')
-        list_sRNA_with_hits = sRNA_provider.get_sRNAs_with_hits(list_sRNA)
-
-        #3.2 Recompute sRNAS with hits
-        print('Recompute sRNAs for sRNAs with hits')
-        list_sRNA_recomputed = sRNA_provider.recompute_sRNAs(list_sRNA_with_hits, 1, int(shift_hits),int(length))
-
-        #3.3 Blast re-computed sRNAs
-        print('Blast the re-computed sRNAs')
+        #3. Blast each sRNA against input genome
+        print('Blast each sRNA against input genome\n')
         try:
-            sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc,filepath_temp)
+            sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
         except Exception as e:
-            print ('An exception occurred at blasting re-computed sRNAS')
-            list_sRNA_recomputed = []
+            print('An exception occurred at blasting re-computed sRNAS')
+            follow_hits=False
 
-    #5 Return output
-    print ('Export output')
-    output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
+        #4 (optional)
+        #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
+        list_sRNA_recomputed = []
 
-    print ('Save Output into srna-data/output_files')
-    output_file_name = str(self.request.id)
-    filepath_output =  "srna-data/output_files/" + output_file_name + ".xlsx"
-    print (filepath_output)
+        if follow_hits:
+            #3.1 Obtan sRNAs with hits
+            print('Get sRNA with hits \n')
+            list_sRNA_with_hits = sRNA_provider.get_sRNAs_with_hits(list_sRNA)
+
+            #3.2 Recompute sRNAS with hits
+            print('Recompute sRNAs for sRNAs with hits')
+            list_sRNA_recomputed = sRNA_provider.recompute_sRNAs(list_sRNA_with_hits, 1, int(shift_hits),int(length))
+
+            #3.3 Blast re-computed sRNAs
+            print('Blast the re-computed sRNAs')
+            try:
+                sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc,filepath_temp)
+            except Exception as e:
+                print ('An exception occurred at blasting re-computed sRNAS')
+                list_sRNA_recomputed = []
+
+        #5 Return output
+        print ('Export output')
+        output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
+
+        #6. Save output
+        print ('Save Output into srna-data/output_files')
+        output_file_name = str(self.request.id)
+        filepath_output =  "srna-data/output_files/" + output_file_name + ".xlsx"
+        print (filepath_output)
+
+        with open(filepath_output, 'wb') as out:
+            out.write(output.read())
+
+        #7. Remove temporal input sequence
+        print ('Remove input sequence')
+        os.remove(sequence_to_read)
 
 
-    with open(filepath_output, 'wb') as out:
-        out.write(output.read())
-
-    #6. Remove temporal input sequence
-    print ('Remove input sequence')
-    os.remove(sequence_to_read)
-
-
-    print ('Task Completed')
-    try:
-        sse.publish({"message": "Task Completed"}, type=self.request.id)
+        try:
+            sse.publish({"message": "Task Completed"}, type=self.request.id)
+        except Exception as e:
+            print('An exception occurred when sending Task Completed msg')
+        
+        print('Task Completed')
     except Exception as e:
-        print('An exception occurred when sending Task Completed msg')
+            print("Unexpected error at _compute_srnas:", sys.exc_info()[0])
+            traceback.print_exc()
     return ('Done')
 
 def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits):
@@ -184,7 +190,6 @@ def compute_srnas():
         #Obtain request parameters
         file = request.files.get('file_sequence')
         name = str(uuid.uuid4()) + '_' + file.filename
-        sequence_to_read = upload_file(file, name)
         data = request.form
         format = data.get('format')
         shift = int(data.get('shift')) if data.get('shift') else None
@@ -214,6 +219,13 @@ def compute_srnas():
         else:
             file_tags = None
 
+        #1. Upload input file
+        if file:
+            sequence_to_read = upload_file(file, name)
+        else:
+            error = {"message": "An error occurred when reading sequence. Please verify file and that format corresponds to the sequence file."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
 
         #2. Validate request parameters
         error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits)
@@ -261,9 +273,11 @@ def compute_srnas():
         remove_file(sequence_to_read)
         return response
 
+
 def remove_file(filename):
     if os.path.exists(filename):
         os.remove(filename)
+
 
 def upload_file(file, name):
     if file and name:
