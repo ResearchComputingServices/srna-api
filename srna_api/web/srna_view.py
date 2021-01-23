@@ -223,7 +223,7 @@ def compute_srnas():
         if file:
             sequence_to_read = upload_file(file, name)
         else:
-            error = {"message": "An error occurred when reading sequence. Please verify file and that format corresponds to the sequence file."}
+            error = {"message": "Please provided an input file to process. Check request format."}
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
