@@ -65,13 +65,5 @@ def create_app(package_name):
 def register_blueprints(app):
     from srna_api.web.views import srna_bp
     app.register_blueprint(srna_bp, url_prefix='/srna_api')
-
-    @sse.after_request 
-    def after_request(response):
-        header = response.headers
-        header['Access-Control-Allow-Origin'] = '*'
-        return response
-
     app.register_blueprint(sse, url_prefix='/srna_api/stream')
-    
     return app
