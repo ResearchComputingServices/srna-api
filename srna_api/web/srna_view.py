@@ -7,6 +7,7 @@ from srna_api.decorators.crossorigin import crossdomain
 from srna_api.decorators.authentication import authentication
 from srna_api.providers.sRNA_provider import sRNA_Provider
 from srna_api.extensions import celery
+from celery.utils.log import get_task_logger
 from flask import jsonify
 import io
 import os
@@ -18,7 +19,11 @@ from srna_api.decorators.crossorigin import crossdomain
 import sys
 import traceback
 
+
 sRNA_provider = sRNA_Provider()
+logger = get_task_logger(__name__)
+
+
 
 def _read_input_sequence(sequence_to_read,accession_number,format):
     sequence_record_list=[]
@@ -35,6 +40,9 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
             sequence_record_list = sRNA_provider.fetch_input_sequence(accession_number)
 
     return sequence_record_list
+
+
+
 
 @celery.task(bind=True)
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
@@ -122,7 +130,7 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
             sse.publish({"message": "Task Completed"}, type=self.request.id)
         except Exception as e:
             print('An exception occurred when sending Task Completed msg')
-        
+
         print('Task Completed')
     except Exception as e:
             print("Unexpected error at _compute_srnas:", sys.exc_info()[0])
@@ -184,7 +192,7 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
     return error
 
 @srna_bp.route("/compute_srnas", methods=['POST'])
-@crossdomain(origin='*')
+#@crossdomain(origin='*')
 def compute_srnas():
     try:
         #Obtain request parameters
@@ -304,7 +312,7 @@ def download_file(filename):
     return Response(json.dumps(error), 404, mimetype="application/json")
 
 @srna_bp.route("/get_output_file", methods=['GET'])
-@crossdomain(origin='*')
+#@crossdomain(origin='*')
 def get_output_file():
     try:
         task_id = request.args.get('task_id')
@@ -323,7 +331,7 @@ def get_output_file():
 
 
 @srna_bp.route("/get_task_status", methods=['GET'])
-@crossdomain(origin='*')
+#@crossdomain(origin='*')
 def get_task_status():
     try:
 
