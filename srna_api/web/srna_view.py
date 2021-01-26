@@ -7,7 +7,6 @@ from srna_api.decorators.crossorigin import crossdomain
 from srna_api.decorators.authentication import authentication
 from srna_api.providers.sRNA_provider import sRNA_Provider
 from srna_api.extensions import celery
-from celery.utils.log import get_task_logger
 from flask import jsonify
 import io
 import os
@@ -21,7 +20,7 @@ import traceback
 
 
 sRNA_provider = sRNA_Provider()
-logger = get_task_logger(__name__)
+
 
 
 
@@ -53,6 +52,7 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
 
         #Path for temporary location
         filepath_temp = "srna-data/temp_files/"
+
 
         # 1. Obtain input sequence
         sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
@@ -346,6 +346,32 @@ def get_task_status():
         print(res.status)
 
         return jsonify({'Task_id': task_id, 'Task_status': res.status}), 200, {}
+
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
+
+
+@srna_bp.route("/get_tasks_status", methods=['POST'])
+@crossdomain(origin='*')
+def get_tasks_status():
+    try:
+
+        data = request.get_json()
+        if not data:
+            error = {"message": "Expected Lists of Tasks. Check format of the request."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
+
+        tasks = data.get('tasks')
+        status = []
+        for task_id in tasks:
+            res = celery.AsyncResult(task_id)
+            dict = {'Task_id': task_id, 'Task_status': res.status}
+            status.append(dict)
+
+        return jsonify(status), 200, {}
 
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
