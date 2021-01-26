@@ -192,7 +192,7 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
     return error
 
 @srna_bp.route("/compute_srnas", methods=['POST'])
-#@crossdomain(origin='*')
+@crossdomain(origin='*')
 def compute_srnas():
     try:
         #Obtain request parameters
@@ -312,7 +312,7 @@ def download_file(filename):
     return Response(json.dumps(error), 404, mimetype="application/json")
 
 @srna_bp.route("/get_output_file", methods=['GET'])
-#@crossdomain(origin='*')
+@crossdomain(origin='*')
 def get_output_file():
     try:
         task_id = request.args.get('task_id')
@@ -331,7 +331,7 @@ def get_output_file():
 
 
 @srna_bp.route("/get_task_status", methods=['GET'])
-#@crossdomain(origin='*')
+@crossdomain(origin='*')
 def get_task_status():
     try:
 
