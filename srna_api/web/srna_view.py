@@ -17,6 +17,7 @@ from flask_sse import sse
 from srna_api.decorators.crossorigin import crossdomain
 import sys
 import traceback
+import time
 
 
 sRNA_provider = sRNA_Provider()
@@ -29,13 +30,11 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
     #1.1 Read an attached sequence file
     if sequence_to_read:
         # Read file_sequence
-        print('Read sequence')
         sequence_record_list = sRNA_provider.read_input_sequence(sequence_to_read, format)
     else:
         # 1.2 Fetch the sequence in Entrez database using accession number
         if accession_number:
             # Fetch the sequence using accession number
-            print("Fetch sequence from Entrez using Accession Number")
             sequence_record_list = sRNA_provider.fetch_input_sequence(accession_number)
 
     return sequence_record_list
@@ -47,94 +46,99 @@ def _read_input_sequence(sequence_to_read,accession_number,format):
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
 
     try:
-        print ('Task Id')
-        print(self.request.id)
+        print('(%s) - 1: Task Started' %self.request.id)
 
         #Path for temporary location
         filepath_temp = "srna-data/temp_files/"
 
 
         # 1. Obtain input sequence
+        print('(%s) - 2: Reading sequence' % self.request.id)
         sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
 
         if len(sequence_record_list) == 0:
             # Error occurred at reading the sequence
-            print ('Error at reading sequence file')
+            print('(%s) - Error at reading sequence file - End of Task' % self.request.id)
             raise KeyError()
 
         #Retrieve sequence name
         sequence_name = sequence_record_list[0].name
 
         #2. Compute sRNA
+        print('(%s) - 3: Compute sRNAS' % self.request.id)
         if only_tags:
             # 2.1. For a specific set of locus gene tags
             if len(gene_tags) == 0 and len(locus_tags) == 0:
-                print ('Error at reading gene/locus tags')
+                print('(%s) - Error at reading gene/locus tags - End of Task' % self.request.id)
                 raise KeyError()
             else:
-                print('Compute sRNAS for a list of gene/locus tags')
                 list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length),gene_tags, locus_tags)
         else:
             # 2.2. For all CDS
-            print('Compute sRNAs for all CDS in genome')
             list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length))
 
         #3. Blast each sRNA against input genome
-        print('Blast each sRNA against input genome\n')
+        print('(%s) - 4: Blast each sRNA against input genome' % self.request.id)
+        start = time.time()
         try:
             sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
         except Exception as e:
-            print('An exception occurred at blasting re-computed sRNAS')
+            print('(%s) - An exception occurred at blasting sRNAS'  % self.request.id)
             follow_hits=False
+
+        end = time.time()
+        print('(%s) - 5: End of blasting. Total mins: %f' % (self.request.id,(end - start) / 60))
+
+
 
         #4 (optional)
         #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
         list_sRNA_recomputed = []
 
+
         if follow_hits:
+            print('(%s) - 6: Following Hits' % self.request.id)
             #3.1 Obtan sRNAs with hits
-            print('Get sRNA with hits \n')
             list_sRNA_with_hits = sRNA_provider.get_sRNAs_with_hits(list_sRNA)
 
             #3.2 Recompute sRNAS with hits
-            print('Recompute sRNAs for sRNAs with hits')
             list_sRNA_recomputed = sRNA_provider.recompute_sRNAs(list_sRNA_with_hits, 1, int(shift_hits),int(length))
 
             #3.3 Blast re-computed sRNAs
-            print('Blast the re-computed sRNAs')
             try:
                 sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc,filepath_temp)
             except Exception as e:
-                print ('An exception occurred at blasting re-computed sRNAS')
+                print('(%s) - An exception occurred at blasting sRNAS'  % self.request.id)
                 list_sRNA_recomputed = []
 
         #5 Return output
-        print ('Export output')
+        print('(%s) - 6: Exporting Output' % self.request.id)
         output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
 
         #6. Save output
-        print ('Save Output into srna-data/output_files')
+        print('(%s) - 7: Saving Output' % self.request.id)
         output_file_name = str(self.request.id)
         filepath_output =  "srna-data/output_files/" + output_file_name + ".xlsx"
-        print (filepath_output)
 
         with open(filepath_output, 'wb') as out:
             out.write(output.read())
 
         #7. Remove temporal input sequence
-        print ('Remove input sequence')
+        print('(%s) - 8: Deleting temporal input' % self.request.id)
         os.remove(sequence_to_read)
 
 
         try:
             sse.publish({"message": "Task Completed"}, type=self.request.id)
         except Exception as e:
-            print('An exception occurred when sending Task Completed msg')
+            print('(%s) - An exception occurred when sending Task Completed msg' % self.request.id)
 
-        print('Task Completed')
     except Exception as e:
             print("Unexpected error at _compute_srnas:", sys.exc_info()[0])
+            print('(%s) - Exception occurred' % self.request.id)
             traceback.print_exc()
+
+    print('(%s) - 9: Task Completed' % self.request.id)
     return ('Done')
 
 def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits):
