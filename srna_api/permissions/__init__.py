@@ -1,1 +1,0 @@
-from srna_api.permissions.permission import *

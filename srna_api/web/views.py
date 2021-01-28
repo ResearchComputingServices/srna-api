@@ -2,15 +2,6 @@ from flask import request, jsonify, url_for, Blueprint
 from flask import json, jsonify, Response, blueprints
 from srna_api.web.common_view import srna_bp
 from srna_api.decorators.crossorigin import crossdomain
-from srna_api.decorators.authentication import authentication
-import srna_api.web.role_view
-import srna_api.web.user_view
-import srna_api.web.image_view
-import srna_api.web.user_field_type_view
-import srna_api.web.user_field_category_view
-import srna_api.web.enumeration_view
-import srna_api.web.user_keycloak
-import srna_api.web.authorization_view
 import srna_api.web.srna_view
 from celery import Celery
 import time
@@ -24,13 +15,11 @@ def add_together(a, b):
 
 @srna_bp.route("/", methods=['GET'])
 @crossdomain(origin='*')
-@authentication
 def hello():
     return "Hello Language2Test!"
 
 @srna_bp.route('/longtask', methods=['POST'])
 @crossdomain(origin='*')
-@authentication
 def longtask():
     task = add_together.delay(23, 42)
     print("\nLaunched add_together\n")

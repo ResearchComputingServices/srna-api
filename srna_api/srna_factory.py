@@ -3,8 +3,6 @@ from flask import jsonify
 from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
-#from flask_cors import CORS
-from flask_sse import sse
 
 def make_celery(app):
     celery = Celery(
@@ -26,7 +24,6 @@ def create_app(package_name):
     from flask import Flask
     app = Flask(package_name)
     from srna_api.extensions import db, ma, migrate, oidc
-    #cors = CORS(app, resources={r"*": {"origins": "*"}})
 
     with open('client_secrets.json') as client_secrets_file:
         client_secrets = json.load(client_secrets_file)
@@ -67,5 +64,4 @@ def create_app(package_name):
 def register_blueprints(app):
     from srna_api.web.views import srna_bp
     app.register_blueprint(srna_bp, url_prefix='/srna_api')
-    app.register_blueprint(sse, url_prefix='/srna_api/stream')
     return app

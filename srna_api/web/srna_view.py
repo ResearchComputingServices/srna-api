@@ -4,17 +4,13 @@ from flask import json
 from flask import request, send_file
 from srna_api.web.common_view import srna_bp
 from srna_api.decorators.crossorigin import crossdomain
-from srna_api.decorators.authentication import authentication
 from srna_api.providers.sRNA_provider import sRNA_Provider
 from srna_api.extensions import celery
 from flask import jsonify
 import io
 import os
 import uuid
-from celery.result import AsyncResult
 from werkzeug import secure_filename
-from flask_sse import sse
-from srna_api.decorators.crossorigin import crossdomain
 import sys
 import traceback
 import time
@@ -22,28 +18,41 @@ import time
 
 sRNA_provider = sRNA_Provider()
 
+def remove_file(filename):
+    if os.path.exists(filename):
+        os.remove(filename)
 
 
 
-def _read_input_sequence(sequence_to_read,accession_number,format):
-    sequence_record_list=[]
-    #1.1 Read an attached sequence file
-    if sequence_to_read:
-        # Read file_sequence
-        sequence_record_list = sRNA_provider.read_input_sequence(sequence_to_read, format)
-    else:
-        # 1.2 Fetch the sequence in Entrez database using accession number
-        if accession_number:
-            # Fetch the sequence using accession number
-            sequence_record_list = sRNA_provider.fetch_input_sequence(accession_number)
+def upload_file(file, name):
+    if file and name:
+        folder = 'srna-data/input_files'
+        filename = secure_filename(name)
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+        fullpath = os.path.join(folder, filename)
+        file.save(fullpath)
+        return fullpath
 
-    return sequence_record_list
 
+def download_file(filename):
+    filename = filename + '.xlsx'
+    fullpath = "srna-data/output_files/" + filename
+    if os.path.exists(fullpath):
+        with open(fullpath, 'rb') as binary:
+            return send_file(
+                io.BytesIO(binary.read()),
+                attachment_filename=filename,
+                as_attachment=True,
+                mimetype="application/binary")
+
+    error = {"message": "File does not exist"}
+    return Response(json.dumps(error), 404, mimetype="application/json")
 
 
 
 @celery.task(bind=True)
-def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
+def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
 
     try:
         print('(%s) - 1: Task Started' %self.request.id)
@@ -51,87 +60,52 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         #Path for temporary location
         filepath_temp = "srna-data/temp_files/"
 
-
         # 1. Obtain input sequence
         print('(%s) - 2: Reading sequence' % self.request.id)
-        sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
+        sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
 
         if len(sequence_record_list) == 0:
             # Error occurred at reading the sequence
             print('(%s) - Error at reading sequence file - End of Task' % self.request.id)
             raise KeyError()
 
-        #Retrieve sequence name
-        sequence_name = sequence_record_list[0].name
-
         #2. Compute sRNA
         print('(%s) - 3: Compute sRNAS' % self.request.id)
-        if only_tags:
-            # 2.1. For a specific set of locus gene tags
-            if len(gene_tags) == 0 and len(locus_tags) == 0:
-                print('(%s) - Error at reading gene/locus tags - End of Task' % self.request.id)
-                raise KeyError()
-            else:
-                list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length),gene_tags, locus_tags)
-        else:
-            # 2.2. For all CDS
-            list_sRNA = sRNA_provider.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length))
+        list_sRNA = sRNA_provider.get_sRNAs(sequence_record_list, shift, length, only_tags, gene_tags, locus_tags)
 
         #3. Blast each sRNA against input genome
-        print('(%s) - 4: Blast each sRNA against input genome' % self.request.id)
-        start = time.time()
-        try:
-            sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
-        except Exception as e:
-            print('(%s) - An exception occurred at blasting sRNAS'  % self.request.id)
-            follow_hits=False
+        if blast:
+            print('(%s) - 4: Blast each sRNA against input genome' % self.request.id)
+            start = time.time()
+            try:
+                sRNA_provider.blast_sRNAs_against_genome(list_sRNA, e_cutoff, identity_perc, filepath_temp)
+            except Exception as e:
+                print('(%s) - An exception occurred at blasting sRNAS'  % self.request.id)
+                follow_hits=False
 
-        end = time.time()
-        print('(%s) - 5: End of blasting. Total mins: %f' % (self.request.id,(end - start) / 60))
+            end = time.time()
+            print('(%s) - 5: End of blasting. Total mins: %f' % (self.request.id,(end - start) / 60))
+        else:
+            follow_hits = False
 
-
-
-        #4 (optional)
+        #5 (optional)
         #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
         list_sRNA_recomputed = []
 
-
         if follow_hits:
             print('(%s) - 6: Following Hits' % self.request.id)
-            #3.1 Obtan sRNAs with hits
-            list_sRNA_with_hits = sRNA_provider.get_sRNAs_with_hits(list_sRNA)
+            list_sRNA_recomputed = sRNA_provider.follow_sRNAS_with_hits(list_sRNA,shift_hits,length,e_cutoff,identity_perc,filepath_temp)
 
-            #3.2 Recompute sRNAS with hits
-            list_sRNA_recomputed = sRNA_provider.recompute_sRNAs(list_sRNA_with_hits, 1, int(shift_hits),int(length))
-
-            #3.3 Blast re-computed sRNAs
-            try:
-                sRNA_provider.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc,filepath_temp)
-            except Exception as e:
-                print('(%s) - An exception occurred at blasting sRNAS'  % self.request.id)
-                list_sRNA_recomputed = []
-
-        #5 Return output
-        print('(%s) - 6: Exporting Output' % self.request.id)
-        output = sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, list_sRNA_recomputed, list_sRNA)
-
-        #6. Save output
-        print('(%s) - 7: Saving Output' % self.request.id)
+        #6 Export output
+        print('(%s) - 7: Exporting Output' % self.request.id)
         output_file_name = str(self.request.id)
-        filepath_output =  "srna-data/output_files/" + output_file_name + ".xlsx"
-
-        with open(filepath_output, 'wb') as out:
-            out.write(output.read())
+        filepath_output = "srna-data/output_files/" + output_file_name + ".xlsx"
+        sequence_name = sequence_record_list[0].name
+        sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, filepath_output, list_sRNA_recomputed, list_sRNA)
 
         #7. Remove temporal input sequence
         print('(%s) - 8: Deleting temporal input' % self.request.id)
         os.remove(sequence_to_read)
-
-
-        try:
-            sse.publish({"message": "Task Completed"}, type=self.request.id)
-        except Exception as e:
-            print('(%s) - An exception occurred when sending Task Completed msg' % self.request.id)
 
     except Exception as e:
             print("Unexpected error at _compute_srnas:", sys.exc_info()[0])
@@ -141,7 +115,10 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
     print('(%s) - 9: Task Completed' % self.request.id)
     return ('Done')
 
-def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits):
+
+
+
+def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits):
     error = ''
     # Returns error if neither a file sequence or an accession number was provided
     if not sequence_to_read and not accession_number:
@@ -172,28 +149,36 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
         error = {"A file with locus or gene tags should be provided."}
         return error
 
-    if not isinstance(e_cutoff, float):
-        error = {"message": "Invalid expected cutoff"}
-        return error
-
-    if not isinstance(identity_perc, float):
-        error = {"message": "Invalid percentage of identity"}
-        return error
-    else:
-        if identity_perc < 0 or identity_perc > 1:
-            error = {"message": "Percentage of identity must be between 0 and 1."}
+    if blast:
+        if not isinstance(e_cutoff, float):
+            error = {"message": "Invalid expected cutoff"}
             return error
 
-    if follow_hits:
-        if not isinstance(shift_hits, int):
-            error = {"message": "Shift (for recomputing) value must be an integer."}
+        if not isinstance(identity_perc, float):
+            error = {"message": "Invalid percentage of identity"}
             return error
         else:
-            if shift_hits == 0:
-                error = {"message": "Shift (for recomputing) value cannot be zero."}
+            if identity_perc < 0 or identity_perc > 1:
+                error = {"message": "Percentage of identity must be between 0 and 1."}
                 return error
 
+        if follow_hits:
+            if not isinstance(shift_hits, int):
+                error = {"message": "Shift (for recomputing) value must be an integer."}
+                return error
+            else:
+                if shift_hits == 0:
+                    error = {"message": "Shift (for recomputing) value cannot be zero."}
+                    return error
+                else:
+                    if shift_hits==shift:
+                        error = {"message": "Shift and Shift (for recomputing) must be different."}
+                        return error
+
     return error
+
+
+
 
 @srna_bp.route("/compute_srnas", methods=['POST'])
 @crossdomain(origin='*')
@@ -208,7 +193,7 @@ def compute_srnas():
         length = int(data.get('length')) if data.get('length') else None
         e_cutoff = float(data.get('e_cutoff')) if data.get('e_cutoff') else None
         identity_perc = float(data.get('identity_perc')) if data.get('identity_perc') else None
-        shift_hits = data.get('shift_hits')
+        shift_hits = int(data.get('shift_hits')) if data.get('shift_hits') else None
         accession_number = data.get('accession_number')
 
         if (data.get('only_tags') and data.get('only_tags') == 'true'):
@@ -221,15 +206,15 @@ def compute_srnas():
         else:
             follow_hits = False
 
-        if len(shift_hits)>0:
-            shift_hits = int(shift_hits)
-        else:
-            shift_hits = None
-
         if only_tags==True:
             file_tags = request.files['file_tags']
         else:
             file_tags = None
+
+        if (data.get('blast') and data.get('blast') == 'true'):
+            blast = True
+        else:
+            blast = False
 
         #1. Upload input file
         if file:
@@ -240,14 +225,14 @@ def compute_srnas():
             return response
 
         #2. Validate request parameters
-        error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, e_cutoff, identity_perc, follow_hits, shift_hits)
+        error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits)
         if len(error) > 0:
             response = Response(json.dumps(error), 400, mimetype="application/json")
             remove_file(sequence_to_read)
             return response
 
-        #3. Load input sequence
-        sequence_record_list = _read_input_sequence(sequence_to_read, accession_number, format)
+        #3. Validate if input sequence and format are a valid biopython input
+        sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
 
         if len(sequence_record_list) == 0:
             # Error occurred at reading the sequence
@@ -269,7 +254,7 @@ def compute_srnas():
                 return response
 
         #5. Call sRNA computation
-        task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags)
+        task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags)
 
         if not task:
             error = {"message": "An error occurred when processing the request"}
@@ -286,34 +271,6 @@ def compute_srnas():
         return response
 
 
-def remove_file(filename):
-    if os.path.exists(filename):
-        os.remove(filename)
-
-
-def upload_file(file, name):
-    if file and name:
-        folder = 'srna-data/input_files'
-        filename = secure_filename(name)
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        fullpath = os.path.join(folder, filename)
-        file.save(fullpath)
-        return fullpath
-
-def download_file(filename):
-    filename = filename + '.xlsx'
-    fullpath = "srna-data/output_files/" + filename
-    if os.path.exists(fullpath):
-        with open(fullpath, 'rb') as binary:
-            return send_file(
-                io.BytesIO(binary.read()),
-                attachment_filename=filename,
-                as_attachment=True,
-                mimetype="application/binary")
-
-    error = {"message": "File does not exist"}
-    return Response(json.dumps(error), 404, mimetype="application/json")
 
 @srna_bp.route("/get_output_file", methods=['GET'])
 @crossdomain(origin='*')
