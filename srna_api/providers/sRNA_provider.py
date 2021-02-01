@@ -522,7 +522,7 @@ class sRNA_Provider:
         if only_tags:
             # 2.1. For a specific set of locus gene tags
             if len(gene_tags) == 0 and len(locus_tags) == 0:
-                print('(%s) - Error at reading gene/locus tags - End of Task' % self.request.id)
+                print('Error at reading gene/locus tags - End of Task')
                 raise KeyError()
             else:
                 list_sRNA = self.compute_sRNAs_from_genome(sequence_record_list, int(shift), int(length), gene_tags,

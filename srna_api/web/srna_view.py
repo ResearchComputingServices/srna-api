@@ -14,7 +14,7 @@ from werkzeug import secure_filename
 import sys
 import traceback
 import time
-
+import random
 
 sRNA_provider = sRNA_Provider()
 
@@ -59,7 +59,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
 
         #Path for temporary location
         filepath_temp = "srna-data/temp_files/"
-
         # 1. Obtain input sequence
         print('(%s) - 2: Reading sequence' % self.request.id)
         sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
@@ -108,9 +107,17 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         os.remove(sequence_to_read)
 
     except Exception as e:
+            # Remove temporal input sequence
+            print('(%s) - Deleting temporal input' % self.request.id)
+            os.remove(sequence_to_read)
             print("Unexpected error at _compute_srnas:", sys.exc_info()[0])
             print('(%s) - Exception occurred' % self.request.id)
             traceback.print_exc()
+            #Throwing this exception on purpose to set the celery task as FAILURE
+            #This would be equivalent as removing the try/except
+            #Otherwise the task.state is always SUCCESS
+            raise KeyError()
+            return 'Error'
 
     print('(%s) - 9: Task Completed' % self.request.id)
     return ('Done')
