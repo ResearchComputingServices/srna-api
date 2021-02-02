@@ -5,7 +5,9 @@ from flask import request, send_file
 from srna_api.web.common_view import srna_bp
 from srna_api.decorators.crossorigin import crossdomain
 from srna_api.providers.sRNA_provider import sRNA_Provider
+from srna_api.providers.fileSystem_provider import fileSystem_Provider
 from srna_api.extensions import celery
+from srna_api.extensions import oidc
 from flask import jsonify
 import io
 import os
@@ -16,15 +18,33 @@ import traceback
 import time
 import random
 
-sRNA_provider = sRNA_Provider()
 
-def remove_file(filename):
+sRNA_provider = sRNA_Provider()
+file_provider = fileSystem_Provider()
+
+input_folder = 'srna-data/input_files/'
+output_folder = "srna-data/output_files/"
+temp_folder = "srna-data/temp_files/"
+
+
+def get_session_id():
+    try:
+        auth = request.headers.get('Authorization')
+        auth_fragments = auth.split(' ')
+        client_session = auth_fragments[1]
+    except:
+        client_session=''
+
+    return client_session
+
+
+
+def remove_file_(filename):
     if os.path.exists(filename):
         os.remove(filename)
 
 
-
-def upload_file(file, name):
+def upload_file_(file, name):
     if file and name:
         folder = 'srna-data/input_files'
         filename = secure_filename(name)
@@ -35,7 +55,7 @@ def upload_file(file, name):
         return fullpath
 
 
-def download_file(filename):
+def download_file_(filename):
     filename = filename + '.xlsx'
     fullpath = "srna-data/output_files/" + filename
     if os.path.exists(fullpath):
@@ -52,13 +72,15 @@ def download_file(filename):
 
 
 @celery.task(bind=True)
-def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags):
+def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags, client_session=None):
 
     try:
         print('(%s) - 1: Task Started' %self.request.id)
 
         #Path for temporary location
-        filepath_temp = "srna-data/temp_files/"
+        #filepath_temp = "srna-data/temp_files/"
+        filepath_temp = temp_folder
+
         # 1. Obtain input sequence
         print('(%s) - 2: Reading sequence' % self.request.id)
         sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
@@ -91,14 +113,18 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
         list_sRNA_recomputed = []
 
+        #x = 3/0 #---> for debugging purposes.
         if follow_hits:
             print('(%s) - 6: Following Hits' % self.request.id)
             list_sRNA_recomputed = sRNA_provider.follow_sRNAS_with_hits(list_sRNA,shift_hits,length,e_cutoff,identity_perc,filepath_temp)
 
         #6 Export output
         print('(%s) - 7: Exporting Output' % self.request.id)
+        if not client_session:
+            client_session = ''
         output_file_name = str(self.request.id)
-        filepath_output = "srna-data/output_files/" + output_file_name + ".xlsx"
+        #filepath_output = "srna-data/output_files/" + prefix + '_' + output_file_name + ".xlsx"
+        filepath_output = output_folder + client_session + '/' + output_file_name + ".xlsx"
         sequence_name = sequence_record_list[0].name
         sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, filepath_output, list_sRNA_recomputed, list_sRNA)
 
@@ -191,7 +217,13 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
 @crossdomain(origin='*')
 def compute_srnas():
     try:
-        #Obtain request parameters
+        #1 Obtain request parameters
+        client_session = get_session_id()
+        if not client_session or client_session=='':
+            error = {"message": "Session Id couldn't be retrieved. Check request format."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
+
         file = request.files.get('file_sequence')
         name = str(uuid.uuid4()) + '_' + file.filename
         data = request.form
@@ -223,32 +255,32 @@ def compute_srnas():
         else:
             blast = False
 
-        #1. Upload input file
+        #2. Upload input file
         if file:
-            sequence_to_read = upload_file(file, name)
+            sequence_to_read = file_provider.upload_file(input_folder, file, name)
         else:
             error = {"message": "Please provided an input file to process. Check request format."}
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
-        #2. Validate request parameters
+        #3. Validate request parameters
         error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits)
         if len(error) > 0:
             response = Response(json.dumps(error), 400, mimetype="application/json")
-            remove_file(sequence_to_read)
+            file_provider.remove_file(sequence_to_read)
             return response
 
-        #3. Validate if input sequence and format are a valid biopython input
+        #4. Validate if input sequence and format are a valid biopython input
         sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
 
         if len(sequence_record_list) == 0:
             # Error occurred at reading the sequence
              error = {"message": "An error occurred when reading sequence. Please verify file and that format corresponds to the sequence file."}
              response = Response(json.dumps(error), 400, mimetype="application/json")
-             remove_file(sequence_to_read)
+             file_provider.remove_file(sequence_to_read)
              return response
 
-        #4. Obtain gene tags and locus tags
+        #5. Obtain and validate gene tags and locus tags (if applicable)
         gene_tags=[]
         locus_tags=[]
         if only_tags:
@@ -257,16 +289,19 @@ def compute_srnas():
             if len(gene_tags) == 0 and len(locus_tags) == 0:
                 error = {"message": "An error occurred when retrieving gene/locus tags. Please verify the format of the tags file."}
                 response = Response(json.dumps(error), 400, mimetype="application/json")
-                remove_file(sequence_to_read)
+                file_provider.remove_file(sequence_to_read)
                 return response
 
+        #6. Create ouput folder per session id
+        file_provider.create_folder(output_folder, client_session)
+
         #5. Call sRNA computation
-        task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags)
+        task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags, client_session)
 
         if not task:
             error = {"message": "An error occurred when processing the request"}
             response = Response(json.dumps(error), 400, mimetype="application/json")
-            remove_file(sequence_to_read)
+            file_provider.remove_file(sequence_to_read)
             return response
         else:
             return jsonify({'Task_id': task.id, 'Task_status': task.status}), 202, {}
@@ -274,7 +309,7 @@ def compute_srnas():
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
-        remove_file(sequence_to_read)
+        file_provider.remove_file(sequence_to_read)
         return response
 
 
@@ -283,6 +318,12 @@ def compute_srnas():
 @crossdomain(origin='*')
 def get_output_file():
     try:
+        client_session = get_session_id()
+        if not client_session or client_session=='':
+            error = {"message": "Session Id couldn't be retrieved. Check request format."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
+
         task_id = request.args.get('task_id')
 
         if not task_id:
@@ -290,7 +331,8 @@ def get_output_file():
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
-        return download_file(task_id)
+        client_folder = output_folder + client_session + '/'
+        return file_provider.download_file(client_folder,task_id)
 
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
@@ -325,7 +367,6 @@ def get_task_status():
 @crossdomain(origin='*')
 def get_tasks_status():
     try:
-
         data = request.get_json()
         if not data:
             error = {"message": "Expected Lists of Tasks. Check format of the request."}
@@ -341,6 +382,27 @@ def get_tasks_status():
 
         return jsonify(status), 200, {}
 
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
+
+
+
+@srna_bp.route("/clear_session", methods=['POST'])
+@crossdomain(origin='*')
+def delete_history():
+    try:
+        client_session = get_session_id()
+        if not client_session or client_session == '':
+            error = {"message": "Session Id couldn't be retrieved. Check request format."}
+            response = Response(json.dumps(error), 400, mimetype="application/json")
+            return response
+
+        client_folder = output_folder + client_session + '/'
+        file_provider.remove_files_in_folder(client_folder)
+        file_provider.remove_folder(client_folder)
+        return jsonify(''), 200, {}
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")

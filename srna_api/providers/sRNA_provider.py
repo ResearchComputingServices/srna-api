@@ -576,7 +576,7 @@ class sRNA_Provider:
         # Creates panda data frame with general info
         general_info = {
             "User Parameters": '',
-            "Input File": seq_file,
+            "Sequence Name": seq_file,
             "Format": format,
             "Position": position,
             "Length": length,
