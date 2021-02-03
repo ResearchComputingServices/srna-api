@@ -407,3 +407,14 @@ def delete_history():
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
         return response
+
+@srna_bp.route("/testing", methods=['POST'])
+@crossdomain(origin='*')
+def testing():
+    try:
+        file_provider.remove_files_old_days(output_folder,0)
+        return jsonify(''), 200, {}
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
