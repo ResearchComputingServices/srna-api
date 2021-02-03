@@ -22,9 +22,15 @@ import random
 sRNA_provider = sRNA_Provider()
 file_provider = fileSystem_Provider()
 
-input_folder = 'srna-data/input_files/'
-output_folder = "srna-data/output_files/"
-temp_folder = "srna-data/temp_files/"
+
+
+input_folder =  oidc.client_secrets["input_folder"]
+output_folder =  oidc.client_secrets["output_folder"]
+temp_folder =  oidc.client_secrets["temp_folder"]
+
+#input_folder = 'srna-data/input_files/'
+#output_folder = "srna-data/output_files/"
+#temp_folder = "srna-data/temp_files/"
 
 
 def get_session_id():
@@ -78,7 +84,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         print('(%s) - 1: Task Started' %self.request.id)
 
         #Path for temporary location
-        #filepath_temp = "srna-data/temp_files/"
         filepath_temp = temp_folder
 
         # 1. Obtain input sequence
@@ -113,7 +118,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         #Recompute sRNAS for all sRNAS that have hits other than themselves in the genome
         list_sRNA_recomputed = []
 
-        #x = 3/0 #---> for debugging purposes.
         if follow_hits:
             print('(%s) - 6: Following Hits' % self.request.id)
             list_sRNA_recomputed = sRNA_provider.follow_sRNAS_with_hits(list_sRNA,shift_hits,length,e_cutoff,identity_perc,filepath_temp)
@@ -123,7 +127,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         if not client_session:
             client_session = ''
         output_file_name = str(self.request.id)
-        #filepath_output = "srna-data/output_files/" + prefix + '_' + output_file_name + ".xlsx"
         filepath_output = output_folder + client_session + '/' + output_file_name + ".xlsx"
         sequence_name = sequence_record_list[0].name
         sRNA_provider.export_output(sequence_name, format, shift, length, e_cutoff, identity_perc, filepath_output, list_sRNA_recomputed, list_sRNA)
@@ -147,8 +150,6 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
 
     print('(%s) - 9: Task Completed' % self.request.id)
     return ('Done')
-
-
 
 
 def _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits):
@@ -400,8 +401,7 @@ def delete_history():
             return response
 
         client_folder = output_folder + client_session + '/'
-        file_provider.remove_files_in_folder(client_folder)
-        file_provider.remove_folder(client_folder)
+        file_provider.clean_history(client_folder,True)
         return jsonify(''), 200, {}
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
@@ -412,9 +412,27 @@ def delete_history():
 @crossdomain(origin='*')
 def testing():
     try:
-        file_provider.remove_files_old_days(output_folder,0)
+        file_provider.clean_history(output_folder,False,0)
+        file_provider.clean_history(input_folder, False, 0)
+        file_provider.clean_history(temp_folder, False, 0)
         return jsonify(''), 200, {}
     except Exception as e:
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
         return response
+
+@srna_bp.route("/session_epoch", methods=['GET'])
+@crossdomain(origin='*')
+def get_session_epoch():
+    try:
+        if "clean_output_folder_days" in oidc.client_secrets:
+            output_cleaning =  oidc.client_secrets["clean_output_folder_days"]
+        else:
+            output_cleaning = 30
+
+        return jsonify(output_cleaning), 200, {}
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
+
