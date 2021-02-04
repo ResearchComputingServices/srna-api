@@ -4,6 +4,7 @@ from flask import json
 from flask import send_file
 import io
 import os
+from sys import platform
 from werkzeug import secure_filename
 from datetime import datetime
 
@@ -108,8 +109,10 @@ class fileSystem_Provider:
     def remove_file_older_than(self, filepath, days):
         if os.path.isfile(filepath):
             if days>0:
-                # print(file)
-                file_created_datetime = os.stat(filepath).st_birthtime
+                if platform == "linux" or platform == "linux2":
+                    file_created_datetime = os.stat(filepath).st_ctime
+                elif platform == "darwin":
+                    file_created_datetime = os.stat(filepath).st_birthtime
                 current_datetime = datetime.timestamp(datetime.now())
                 dif = current_datetime - file_created_datetime  # Dif in seconds between two days
                 # 86400 = Number of secs in 1 day
