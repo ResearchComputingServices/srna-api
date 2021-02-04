@@ -15,6 +15,11 @@ class fileSystem_Provider:
             os.makedirs(fullpath)
 
 
+    def create_folder_fullpath(self, folder):
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+
     def upload_file(self, folder, file, name):
         if file and name:
             #path = 'srna-data/input_files'
@@ -140,7 +145,7 @@ class fileSystem_Provider:
                             self.remove_file_older_than(filepath, days)
                         #Remove subfolder -if empty
                         try:
-                            print (fullpath)
+                            #print (fullpath)
                             if not os.listdir(fullpath):
                                 os.rmdir(fullpath)
                                 #print ('Subfolder Removed')

@@ -212,6 +212,10 @@ def _validate_request(sequence_to_read, accession_number, format, shift, length,
     return error
 
 
+def validate_output_folders():
+    file_provider.create_folder_fullpath(input_folder)
+    file_provider.create_folder_fullpath(output_folder)
+    file_provider.create_folder_fullpath(temp_folder)
 
 
 @srna_bp.route("/compute_srnas", methods=['POST'])
@@ -255,6 +259,9 @@ def compute_srnas():
             blast = True
         else:
             blast = False
+
+        #2. Check if file outputs exists
+        validate_output_folders()
 
         #2. Upload input file
         if file:

@@ -13,6 +13,18 @@ temp_days =  oidc.client_secrets["clean_temp_folder_days"]
 
 
 if __name__ == '__main__':
+    print ('Removing files from ')
+    print (output_folder)
     file_provider.clean_history(output_folder, False, output_days)
+    print('Removing files from ')
+    print(input_folder)
     file_provider.clean_history(input_folder, False, input_days)
+    print('Removing files from ')
+    print(temp_folder)
     file_provider.clean_history(temp_folder, False, temp_days)
+
+    file_provider.create_folder_fullpath(input_folder)
+    file_provider.create_folder_fullpath(output_folder)
+    file_provider.create_folder_fullpath(temp_folder)
+
+    print('Done!')
