@@ -28,11 +28,6 @@ input_folder =  oidc.client_secrets["input_folder"]
 output_folder =  oidc.client_secrets["output_folder"]
 temp_folder =  oidc.client_secrets["temp_folder"]
 
-#input_folder = 'srna-data/input_files/'
-#output_folder = "srna-data/output_files/"
-#temp_folder = "srna-data/temp_files/"
-
-
 def get_session_id():
     try:
         auth = request.headers.get('Authorization')
@@ -415,18 +410,6 @@ def delete_history():
         response = Response(json.dumps(error), 500, mimetype="application/json")
         return response
 
-@srna_bp.route("/testing", methods=['POST'])
-@crossdomain(origin='*')
-def testing():
-    try:
-        file_provider.clean_history(output_folder,False,0)
-        file_provider.clean_history(input_folder, False, 0)
-        file_provider.clean_history(temp_folder, False, 0)
-        return jsonify(''), 200, {}
-    except Exception as e:
-        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
-        response = Response(json.dumps(error), 500, mimetype="application/json")
-        return response
 
 @srna_bp.route("/session_epoch", methods=['GET'])
 @crossdomain(origin='*')
