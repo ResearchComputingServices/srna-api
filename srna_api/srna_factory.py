@@ -4,6 +4,7 @@ from werkzeug.routing import RequestRedirect
 from srna_api.decorators.crossorigin import crossdomain
 from celery import Celery
 
+
 def make_celery(app):
     celery = Celery(
         app.import_name,
@@ -65,3 +66,4 @@ def register_blueprints(app):
     from srna_api.web.views import srna_bp
     app.register_blueprint(srna_bp, url_prefix='/srna_api')
     return app
+

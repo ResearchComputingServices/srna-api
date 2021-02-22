@@ -16,17 +16,49 @@ from werkzeug import secure_filename
 import sys
 import traceback
 import time
-import random
-
+import redis
 
 sRNA_provider = sRNA_Provider()
 file_provider = fileSystem_Provider()
-
+list_tasks = []
 
 
 input_folder =  oidc.client_secrets["input_folder"]
 output_folder =  oidc.client_secrets["output_folder"]
 temp_folder =  oidc.client_secrets["temp_folder"]
+max_requests_celery = oidc.client_secrets["max_requests_at_celery"]
+
+
+def get_celery_queue_in_redis():
+    r = redis.Redis("localhost", 6379)
+    celery_jobs = r.llen('celery')
+    return celery_jobs
+
+def get_total_tasks_in_celery():
+    # Inspect all nodes.
+    insp = celery.control.inspect()
+    #Active tasks (being processed by a worker)
+    active_lst = insp.active()
+    #Tasks scheduled to be processed
+    scheduled_lst = insp.scheduled()
+    #Tasks received by a worker but not yet scheduled
+    reserved_lst = insp.reserved()
+
+    total_tasks = 0
+    if active_lst:
+        for key in active_lst:
+            total_tasks = total_tasks + len(active_lst[key])
+
+    if scheduled_lst:
+        for key in scheduled_lst:
+            total_tasks = total_tasks + len(scheduled_lst[key])
+
+    if reserved_lst:
+        for key in reserved_lst:
+            total_tasks = total_tasks + len(reserved_lst[key])
+
+    return total_tasks
+
 
 def get_session_id():
     try:
@@ -74,7 +106,6 @@ def download_file_(filename):
 
 @celery.task(bind=True)
 def _compute_srnas(self, sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff,identity_perc, follow_hits, shift_hits, gene_tags, locus_tags, client_session=None):
-
     try:
         print('(%s) - 1: Task Started' %self.request.id)
 
@@ -130,6 +161,8 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
         print('(%s) - 8: Deleting temporal input' % self.request.id)
         os.remove(sequence_to_read)
 
+        print('(%s) - 9: Task Completed' % self.request.id)
+
     except Exception as e:
             # Remove temporal input sequence
             print('(%s) - Deleting temporal input' % self.request.id)
@@ -143,7 +176,7 @@ def _compute_srnas(self, sequence_to_read, accession_number, format, shift, leng
             raise KeyError()
             return 'Error'
 
-    print('(%s) - 9: Task Completed' % self.request.id)
+
     return ('Done')
 
 
@@ -224,6 +257,13 @@ def compute_srnas():
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
+        #2. Check if celery queue in redis is not at its full capacity
+        total = get_celery_queue_in_redis()
+        if total > max_requests_celery:
+            error = {"message": "Service is unavailable. Please submit your request later."}
+            response = Response(json.dumps(error), 503, mimetype="application/json")
+            return response
+
         file = request.files.get('file_sequence')
         name = str(uuid.uuid4()) + '_' + file.filename
         data = request.form
@@ -255,10 +295,10 @@ def compute_srnas():
         else:
             blast = False
 
-        #2. Check if file outputs exists
+        #3. Check if file outputs folders exists
         validate_output_folders()
 
-        #2. Upload input file
+        #4. Upload input file
         if file:
             sequence_to_read = file_provider.upload_file(input_folder, file, name)
         else:
@@ -266,14 +306,14 @@ def compute_srnas():
             response = Response(json.dumps(error), 400, mimetype="application/json")
             return response
 
-        #3. Validate request parameters
+        #5. Validate request parameters
         error = _validate_request(sequence_to_read, accession_number, format, shift, length, only_tags, file_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits)
         if len(error) > 0:
             response = Response(json.dumps(error), 400, mimetype="application/json")
             file_provider.remove_file(sequence_to_read)
             return response
 
-        #4. Validate if input sequence and format are a valid biopython input
+        #6. Validate if input sequence and format are a valid biopython input
         sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
 
         if len(sequence_record_list) == 0:
@@ -283,7 +323,7 @@ def compute_srnas():
              file_provider.remove_file(sequence_to_read)
              return response
 
-        #5. Obtain and validate gene tags and locus tags (if applicable)
+        #7. Obtain and validate gene tags and locus tags (if applicable)
         gene_tags=[]
         locus_tags=[]
         if only_tags:
@@ -295,10 +335,10 @@ def compute_srnas():
                 file_provider.remove_file(sequence_to_read)
                 return response
 
-        #6. Create ouput folder per session id
+        #8. Create ouput folder per session id
         file_provider.create_folder(output_folder, client_session)
 
-        #5. Call sRNA computation
+        #9. Call sRNA computation
         task = _compute_srnas.delay(sequence_to_read, accession_number, format, shift, length, only_tags, blast, e_cutoff, identity_perc, follow_hits, shift_hits, gene_tags, locus_tags, client_session)
 
         if not task:
@@ -425,4 +465,26 @@ def get_session_epoch():
         error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
         response = Response(json.dumps(error), 500, mimetype="application/json")
         return response
+
+
+@srna_bp.route("/queue_load", methods=['GET'])
+@crossdomain(origin='*')
+def get_queue_load():
+    try:
+        total = get_celery_queue_in_redis()
+        if total>max_requests_celery:
+            error = {"message": "Service is unavailable. Please submit your request later."}
+            response = Response(json.dumps(error), 503, mimetype="application/json")
+            return response
+
+        return jsonify(total), 200, {}
+    except Exception as e:
+        error = {"exception": str(e), "message": "Exception has occurred. Check the format of the request."}
+        response = Response(json.dumps(error), 500, mimetype="application/json")
+        return response
+
+
+
+
+
 
