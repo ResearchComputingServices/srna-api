@@ -5,6 +5,9 @@ from srna_api.web import srna_view
 import sys, getopt
 from srna_api.extensions import celery
 import redis
+from shutil import copyfile
+import uuid
+
 
 sRNA_provider = sRNA_Provider()
 file_provider = fileSystem_Provider()
@@ -60,7 +63,7 @@ def make_requests():
     try:
         #1 Obtain request parameters
         client_session = "test_session"
-        sequence_to_read = "srna-data/test.gbk"
+        test_file = "srna-data/temp_files/test_seq.gbk"
         format = 'genbank'
         shift = -8
         length = 21
@@ -72,6 +75,12 @@ def make_requests():
         follow_hits = True
         file_tags = None
         blast = True
+
+
+        name = str(uuid.uuid4())
+        sequence_to_read = "srna-data/temp_files/" + name + ".gbk"
+        copyfile(test_file, sequence_to_read)
+        print ('Input {} '.format(sequence_to_read))
 
         #Validate if input sequence and format are a valid biopython input
         sequence_record_list = sRNA_provider.load_input_sequence(sequence_to_read, accession_number, format)
