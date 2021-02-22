@@ -60,7 +60,7 @@ def make_requests():
     try:
         #1 Obtain request parameters
         client_session = "test_session"
-        sequence_to_read = "srna-data/temp_files/test.gbk"
+        sequence_to_read = "srna-data/test.gbk"
         format = 'genbank'
         shift = -8
         length = 21
