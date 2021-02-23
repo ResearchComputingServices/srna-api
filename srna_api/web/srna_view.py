@@ -472,7 +472,7 @@ def get_session_epoch():
 def get_queue_load():
     try:
         total = get_celery_queue_in_redis()
-        if total>max_requests_celery:
+        if total>=max_requests_celery:
             error = {"message": "Service is unavailable. Please submit your request later."}
             response = Response(json.dumps(error), 503, mimetype="application/json")
             return response
