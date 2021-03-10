@@ -260,7 +260,7 @@ def compute_srnas():
         #2. Check if celery queue in redis is not at its full capacity
         total = get_celery_queue_in_redis()
         if total >= max_requests_celery:
-            error = {"message": "Service is unavailable. Please submit your request later."}
+            error = {"message": "Service is at its full capacity. Please submit your request later."}
             response = Response(json.dumps(error), 503, mimetype="application/json")
             return response
 
@@ -473,7 +473,7 @@ def get_queue_load():
     try:
         total = get_celery_queue_in_redis()
         if total>=max_requests_celery:
-            error = {"message": "Service is unavailable. Please submit your request later."}
+            error = {"message": "Service is at its full capacity. Please submit your request later."}
             response = Response(json.dumps(error), 503, mimetype="application/json")
             return response
 
