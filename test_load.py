@@ -63,7 +63,7 @@ def make_requests():
     try:
         #1 Obtain request parameters
         client_session = "test_session"
-        test_file = "srna-data/temp_files/test_seq.gbff"
+        test_file = "srna-data/test/test_seq.gbff"
         format = 'genbank'
         shift = -8
         length = 21
