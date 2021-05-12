@@ -189,11 +189,11 @@ class sRNA_Provider:
 
 
     def __print_srna(self, srna):
-        print ('sRNA: ',srna.sequence_sRNA)
+        print ('asRNA: ',srna.sequence_sRNA)
 
 
-        print ('sRNA location: ['+str("{:,}".format(self._start_in_file(srna.start_position_sRNA))) + ' - ' + str("{:,}".format(srna.end_position_sRNA)) + ']')
-        print ('sRNA Length: ',srna.length_sRNA)
+        print ('asRNA location: ['+str("{:,}".format(self._start_in_file(srna.start_position_sRNA))) + ' - ' + str("{:,}".format(srna.end_position_sRNA)) + ']')
+        print ('asRNA Length: ',srna.length_sRNA)
         print ('CDS: [' + str("{:,}".format(self._start_in_file(srna.start_position_CDS))) + '-' + str("{:,}".format(srna.end_position_CDS)) + '] (' + self.__sign(srna.strand) + ')')
         if srna.gene!='':
             print ('Info: ', srna.gene)
@@ -219,7 +219,7 @@ class sRNA_Provider:
     def __print_list_srna(self, list_sRNA):
         for index, srna in enumerate(list_sRNA):
                 print ('\n')
-                print("sRNA #" + str(index + 1))
+                print("asRNA #" + str(index + 1))
                 self.__print_srna(srna)
 
 
@@ -229,7 +229,7 @@ class sRNA_Provider:
                 print('----------------------------------------------------------------------------')
                 print ("Record: # ", record_index+1)
                 self.__print_seq_record(seq_record_list[record_index])
-                print ('Total sRNAs: ', len(list_sRNA_per_record))
+                print ('Total asRNAs: ', len(list_sRNA_per_record))
                 self.__print_list_srna(list_sRNA_per_record)
 
 
@@ -499,7 +499,7 @@ class sRNA_Provider:
         try:
             self.blast_sRNAs_against_genome(list_sRNA_recomputed, e_cutoff, identity_perc, filepath_temp)
         except Exception as e:
-            print('An exception occurred at blasting sRNAS (recomputed)')
+            print('An exception occurred at blasting asRNAS (recomputed)')
             list_sRNA_recomputed = []
 
         return list_sRNA_recomputed
@@ -547,14 +547,14 @@ class sRNA_Provider:
 
         if display:
             dict["Record"] = str(srna.input_record + 1)
-            dict["sRNA"] = str(srna.sequence_sRNA)
+            dict["asRNA"] = str(srna.sequence_sRNA)
             dict["Strand"] = srna.strand
             dict["Gene"] = srna.gene
             dict["Locus Tag"] = srna.locus_tag
-            dict["sRNA Start"] = self._start_in_file(srna.start_position_sRNA)
-            dict["sRNA End"] = self._end_in_file(srna.end_position_sRNA)
-            dict["sRNA Length"] = srna.length_sRNA
-            dict["Shift/Position"] = srna.shift
+            dict["asRNA Start"] = self._start_in_file(srna.start_position_sRNA)
+            dict["asRNA End"] = self._end_in_file(srna.end_position_sRNA)
+            dict["asRNA Length"] = srna.length_sRNA
+            dict["Offset Position"] = srna.shift
             dict["CDS Start"] = self._start_in_file(srna.start_position_CDS)
             dict["CDS End"] = self._end_in_file(srna.end_position_CDS)
             if hit:
@@ -565,11 +565,11 @@ class sRNA_Provider:
                     dict["Align Length"] = hit.align_length
                     dict["Perc. Identity"] = (hit.score / srna.length_sRNA) * 100
                     if is_a_hit:
-                        dict["Description"] = "hit"
+                        dict["Description"] = "Offset-hit"
                     else:
-                        dict["Description"] = "srna"
+                        dict["Description"] = "asRNA"
             else:
-                dict["Hit Start"] = 'Blast did not returned any output for the selected threshold and percentage of identify parameters.'
+                dict["Hit Start"] = 'Blast did not return any output for the selected threshold and percentage of identity parameters.'
                 dict["Hit End"] = ''
                 dict["Expected Value"] = ''
                 dict["Align Length"] = ''
@@ -708,11 +708,11 @@ class sRNA_Provider:
             "Sequence Name": name_seq,
             "Sequence Description": description_seq,
             "Format": format,
-            "Position": position,
+            "Offset Position": position,
             "Length": length,
-            "Expected cutoff": e_cutoff,
+            "Expected Cutoff": e_cutoff,
             "Percentage Indentity": perc_identity,
-            "Position for Recomputing": position_rec
+            "Offset Position for Recomputing": position_rec
         }
 
         df_ginfo = pd.DataFrame.from_dict(general_info, orient='index')
@@ -721,14 +721,14 @@ class sRNA_Provider:
         # Creates panda date frame with column headings
         headings = {
             "Seq. Record": '',
-            "sRNA": '',
+            "asRNA": '',
             "Strand": '',
             "Gene": '',
             "Locus Tag": '',
-            "sRNA Start": '',
-            "sRNA End": '',
-            "sRNA Length": '',
-            "Shift/Position": '',
+            "asRNA Start": '',
+            "asRNA End": '',
+            "asRNA Length": '',
+            "Offset Position": '',
             "CDS Start": '',
             "CDS End": '',
             "Hit Start": '',
@@ -764,133 +764,6 @@ class sRNA_Provider:
         return df_ginfo, df_headings, df_rows
 
 
-
-
-    def export_output_old(self, user_filename, name_seq, description_seq, format, position, position_rec, length,
-                      e_cutoff, perc_identity, output_filename, list_sRNA_recomputed=None, list_sRNA=None, gene_tags_input=None,
-                      locus_tags_input=None, input_tags_filename=None):
-
-        # Writes frames to excel
-        writer = pd.ExcelWriter(output_filename, engine='xlsxwriter')
-
-        if list_sRNA:
-            # Export good sRNAs: sRNAs without hits
-            srnas_without_hits = self.get_sRNAs_without_hits(list_sRNA, list_sRNA_recomputed)
-            title = 'Good sRNAs: sRNAs without hits in the genome'
-            msg = 'There are no good sRNAs. All computed sRNAs have hits in the genome.'
-            df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(srnas_without_hits, title, user_filename, name_seq,
-                                                                       description_seq, format, position, position_rec, length,
-                                                                       e_cutoff, perc_identity, False, msg)
-            df_ginfo.to_excel(writer, sheet_name="Good_srnas", index=True)
-            df_headings.to_excel(writer, startrow=13, sheet_name="Good_srnas", index=False)
-            df_rows.to_excel(writer, sheet_name="Good_srnas", startrow=14, index=False, header=False)
-
-            # Export hits
-        if list_sRNA_recomputed:
-            title = 'sRNAs with hits in the genome'
-            msg = 'There are no sRNAs with hits. All computed sRNAs were good.'
-            df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(list_sRNA_recomputed, title, user_filename, name_seq,
-                                                                       description_seq, format, position, position_rec, length,
-                                                                       e_cutoff, perc_identity, True, msg)
-            df_ginfo.to_excel(writer, sheet_name="Hits", index=True)
-            df_headings.to_excel(writer, startrow=13, sheet_name="Hits", index=False)
-            df_rows.to_excel(writer, sheet_name="Hits", startrow=14, index=False, header=False)
-
-            # Export all sRNAS
-        if list_sRNA:
-            title = 'All computed sRNAs and its hits.'
-            msg = 'There are no computed sRNAs. Verify input sequence and/or input tags file (if provided).'
-            if list_sRNA_recomputed and len(list_sRNA_recomputed)>0:
-                l = self._get_sRNAs_without_hits(list_sRNA)
-                all_srnas = l + list_sRNA_recomputed
-            else:
-                all_srnas = list_sRNA
-            df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(all_srnas, title, user_filename, name_seq,
-                                                                       description_seq, format, position, position_rec, length,
-                                                                       e_cutoff, perc_identity, False, msg)
-            df_ginfo.to_excel(writer, sheet_name="All", index=True)
-            df_headings.to_excel(writer, startrow=13, sheet_name="All", index=False)
-            df_rows.to_excel(writer, sheet_name="All", startrow=14, index=False, header=False)
-
-            # Export gene tags and locs tags of sRNAS without hits
-        if srnas_without_hits:
-            title = 'Pairs of gene and locus tags of good sRNAs (sRNAs without hits)'
-            description = 'The columns are correlated.'
-            general_info = []
-            general_info.append(title)
-            general_info.append(description)
-            df_ginfo = pd.DataFrame(general_info)
-            df_ginfo.to_excel(writer, sheet_name="Good Tags", header=False, index=False)
-
-            tag_list = self.get_gene_locus_tags_correlated(srnas_without_hits)
-            headerF = True
-            if len(tag_list) == 0:
-                tag_list.append('There are no good sRNAs. All computed sRNAs have hits in the genome.')
-                headerF = False
-
-            df = pd.DataFrame(tag_list)
-            df.to_excel(writer, sheet_name="Good Tags", startrow=4, header=headerF, index=False)
-
-            # Export gene tags and locs tags of sRNAS with hits
-        if list_sRNA_recomputed:
-            title = 'Pairs of gene and locus tags of sRNAs WITH hits'
-            description = 'The columns are correlated.'
-
-            general_info = []
-            general_info.append(title)
-            general_info.append(description)
-
-            df_ginfo = pd.DataFrame(general_info)
-            df_ginfo.to_excel(writer, sheet_name="Bad Tags", header=False, index=False)
-
-            tag_list = self.get_hit_tags_correlated(list_sRNA_recomputed)
-            headerF = True
-            if len(tag_list) == 0:
-                tag_list.append('There are no sRNAs with hits. All computed sRNAs were good.')
-                headerF = False
-
-            df = pd.DataFrame(tag_list)
-            df.to_excel(writer, sheet_name="Bad Tags", startrow=4, header=headerF, index=False)
-
-            # Export which genes were not found from input tags
-        if gene_tags_input and len(gene_tags_input) > 0 and locus_tags_input and len(locus_tags_input) > 0:
-            gene_tags_not_found, locus_tags_not_found = self.get_not_processed_tags(list_sRNA, gene_tags_input,
-                                                                                    locus_tags_input)
-            title = 'Input tags file: ' + input_tags_filename
-
-            if len(gene_tags_not_found) == 0 and len(locus_tags_not_found) == 0:
-                description = 'All gene and/or locus tags were found in the genome, and therefore at least one sRNAs was computed for those tags.'
-            else:
-                description = 'The following genes and/or locus tags were NOT found in the genome and therefore sRNAs were NOT computed for those tags. Notice: the columns are NOT correlated. '
-
-            general_info = []
-            general_info.append(title)
-            general_info.append(description)
-
-            df_ginfo = pd.DataFrame(general_info)
-            df_ginfo.to_excel(writer, sheet_name="Input Tags Result", header=False, index=False)
-
-            headings = {
-                "Gene_Tag": '',
-                " ": ' ',
-                "Locus_Tag ": '',
-            }
-
-            df_headings = pd.DataFrame([headings])
-            df_headings.to_excel(writer, startrow=4, sheet_name="Input Tags Result", index=False)
-            df = pd.DataFrame(gene_tags_not_found)
-            df.to_excel(writer, sheet_name="Input Tags Result", startrow=5, startcol=0, header=False, index=False)
-            df = pd.DataFrame(locus_tags_not_found)
-            df.to_excel(writer, sheet_name="Input Tags Result", startrow=5, startcol=2, header=False, index=False)
-
-        workbook = writer.book
-        workbook.formats[0].set_font_size(14)
-
-        # Close the Pandas Excel writer and output the Excel file.
-        writer.save()
-
-
-
     def export_output(self, user_filename, name_seq, description_seq, format, position, position_rec, length,
                       e_cutoff, perc_identity, output_filename, list_sRNA_recomputed=None, list_sRNA=None,
                       gene_tags_input=None,
@@ -912,7 +785,7 @@ class sRNA_Provider:
             if list_sRNA:
                 # Export good sRNAs: sRNAs without hits
                 srnas_without_hits = self.get_sRNAs_without_hits(list_sRNA, list_sRNA_recomputed)
-                title = 'Good sRNAs: sRNAs without hits in the genome'
+                title = 'Good asRNAs: asRNAs without off-target hits in the genome'
                 msg = 'There are no good sRNAs. '
                 df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(srnas_without_hits, title, user_filename,
                                                                            name_seq, description_seq, format, position,
@@ -924,8 +797,8 @@ class sRNA_Provider:
 
             # Export hits
             if list_sRNA_recomputed:
-                title = 'sRNAs with hits in the genome'
-                msg = 'There are no sRNAs with hits.'
+                title = 'asRNAs with off-target hits in the genome'
+                msg = 'There are not asRNAs with off-targe hits.'
                 df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(list_sRNA_recomputed, title, user_filename,
                                                                            name_seq, description_seq, format, position,
                                                                            position_rec, length, e_cutoff,
@@ -936,8 +809,8 @@ class sRNA_Provider:
 
             # Export all sRNAS
             if list_sRNA:
-                title = 'All computed sRNAs and its hits.'
-                msg = 'There are no computed sRNAs. Verify input sequence and/or input tags file (if provided).'
+                title = 'All computed asRNAs and its hits.'
+                msg = 'There are no computed asRNAs. Verify input sequence and/or input tags file (if provided).'
                 if list_sRNA_recomputed and len(list_sRNA_recomputed) > 0:
                     l1 = self._get_sRNAs_without_hits(list_sRNA)
                     l2 = self._get_sRNAs_without_blast_info(list_sRNA)
@@ -954,7 +827,7 @@ class sRNA_Provider:
 
             # Export gene tags and locs tags of sRNAS without hits
             if srnas_without_hits:
-                title = 'Pairs of gene and locus tags of good sRNAs (sRNAs without hits)'
+                title = 'Pairs of gene and locus tags of good asRNAs (asRNAs without off-target hits)'
                 description = 'The columns are correlated.'
                 general_info = []
                 general_info.append(title)
@@ -965,7 +838,7 @@ class sRNA_Provider:
                 tag_list = self.get_gene_locus_tags_correlated(srnas_without_hits)
                 headerF = True
                 if len(tag_list) == 0:
-                    tag_list.append('There are no good sRNAs. ')
+                    tag_list.append('There are no good asRNAs. ')
                     headerF = False
 
                 df = pd.DataFrame(tag_list)
@@ -973,7 +846,7 @@ class sRNA_Provider:
 
             # Export gene tags and locs tags of sRNAS with hits
             if list_sRNA_recomputed:
-                title = 'Pairs of gene and locus tags of sRNAs WITH hits'
+                title = 'Pairs of gene and locus tags of asRNAs WITH off-target hits'
                 description = 'The columns are correlated.'
 
                 general_info = []
@@ -986,14 +859,14 @@ class sRNA_Provider:
                 tag_list = self.get_hit_tags_correlated(list_sRNA_recomputed)
                 headerF = True
                 if len(tag_list) == 0:
-                    tag_list.append('There are no sRNAs with hits.')
+                    tag_list.append('There are no asRNAs with off-target hits.')
                     headerF = False
 
                 df = pd.DataFrame(tag_list)
                 df.to_excel(writer, sheet_name="Bad Tags", startrow=4, header=headerF, index=False)
         else:
-            title = 'All computed sRNAs.'
-            msg = 'There are no computed sRNAs. Verify input sequence and/or input tags file (if provided).'
+            title = 'All computed asRNAs.'
+            msg = 'There are no computed asRNAs. Verify input sequence and/or input tags file (if provided).'
             all_srnas = list_sRNA
             df_ginfo, df_headings, df_rows = self.sRNAs_to_data_frames(all_srnas, title, user_filename, name_seq,
                                                                        description_seq, format, position, position_rec,
@@ -1010,9 +883,9 @@ class sRNA_Provider:
             title = 'Input tags file: ' + input_tags_filename
 
             if len(gene_tags_not_found) == 0 and len(locus_tags_not_found) == 0:
-                description = 'All gene and/or locus tags were found in the genome, and therefore at least one sRNAs was computed for those tags.'
+                description = 'All gene and/or locus tags were found in the genome, and therefore at least one asRNA was computed for those tags.'
             else:
-                description = 'The following genes and/or locus tags were NOT found in the genome and therefore sRNAs were NOT computed for those tags. Notice: the columns are NOT correlated. '
+                description = 'The following genes and/or locus tags were NOT found in the genome and therefore asRNAs were NOT computed for those tags. Notice: the columns are NOT correlated. '
 
             general_info = []
             general_info.append(title)
